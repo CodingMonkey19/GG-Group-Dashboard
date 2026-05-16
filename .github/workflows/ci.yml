@@ -47,6 +47,13 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: 'npm'
           cache-dependency-path: frontend/package.json
+      # Frontend re-exports backend's `src/shared/contracts.ts` via a
+      # relative path; tsc resolves `import { z } from 'zod'` from THAT
+      # file's directory, which means it needs backend/node_modules to be
+      # populated. So install backend deps first.
+      - name: Install backend deps (for shared contracts.ts → zod resolution)
+        working-directory: backend
+        run: npm install
       - name: Install
         working-directory: frontend
         run: npm install

@@ -6,7 +6,11 @@
     "useIgnoreFile": true
   },
   "files": {
-    "include": ["backend/**/*.{ts,tsx,js,jsx,json}", "frontend/**/*.{ts,tsx,js,jsx,json}", "scripts/**/*.{ts,js}"],
+    "include": [
+      "backend/**/*.{ts,tsx,js,jsx,json}",
+      "frontend/**/*.{ts,tsx,js,jsx,json}",
+      "scripts/**/*.{ts,js}"
+    ],
     "ignore": [
       "**/node_modules/**",
       "**/dist/**",
