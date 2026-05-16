@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "folder_source": {
+    "drive_folder_id": "1xKJmpTDMVKLGLLnGBsOjHdEMHxiDsdTl",
+    "copy_name_suffix": " (Invoice Audit 2026-05-12)",
+    "excluded_order_codes": [
+      "GG Group Status",
+      "Central LT"
+    ],
+    "standard_column_mapping": {
+      "status": "A",
+      "link_builder": "B",
+      "website": "C",
+      "price": "G",
+      "target_url": "I",
+      "anchor": "J",
+      "live_url": "L",
+      "invoice_date": "M",
+      "invoice_url": "N",
+      "invoice_status": "O"
+    }
+  }
+}

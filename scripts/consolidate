@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Run the GG Spend Dashboard consolidation pipeline once, end-to-end.
+# Pulls every configured sheet, scrapes/parses linked artifacts as v1 allows
+# (PDF / Drive PDF only — PayPal is URL-string parse, no fetch), normalizes
+# everything to EUR, writes the consolidated SQLite store atomically.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec npx --prefix backend tsx backend/src/pipeline/consolidate.ts "$@"

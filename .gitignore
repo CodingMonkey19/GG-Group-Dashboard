@@ -1,0 +1,32 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# Claude Code agent folder — may store credentials/auth state
+# (per spec-kit Agent Folder Security warning)
+.claude/
+
+# Node / build artifacts
+node_modules/
+dist/
+build/
+.next/
+.cache/
+*.log
+
+# Test caches + coverage
+coverage/
+.vitest-cache/
+
+# Runtime data store (consolidated SQLite + ECB rate cache live here)
+data/
+!data/.gitkeep
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local-only Codex config (project trust + per-project overrides)
+.codex/

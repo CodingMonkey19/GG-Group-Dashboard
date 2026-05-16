@@ -1,0 +1,8 @@
+{
+  "rows": [
+    ["Done", "Saras", "ok-site.com",      "100", "EUR", "2026-04-15", "https://www.paypal.com/invoice/p/#OK-1",       "paid"],
+    ["Done", "Saras", "no-price.com",     "",    "EUR", "2026-04-15", "https://www.paypal.com/invoice/p/#NOPRICE",   "paid"],
+    ["Done", "Saras", "garbage-price.com","abc", "EUR", "2026-04-15", "https://www.paypal.com/invoice/p/#GARBAGE",    "paid"],
+    ["Done", "Saras", "exotic-cur.com",   "300", "XPT", "2026-04-15", "https://www.paypal.com/invoice/p/#XPT-1",      "paid"]
+  ]
+}

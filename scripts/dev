@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Local development: backend watch + frontend Vite dev server in parallel.
+# Frontend Vite proxies /api/* to the backend.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+root_dir="$PWD"
+backend_port="${BACKEND_PORT:-8080}"
+backend_host="${HOST:-127.0.0.1}"
+
+cleanup() {
+  local code=$?
+  jobs -p | xargs -r kill 2>/dev/null || true
+  exit "$code"
+}
+trap cleanup EXIT INT TERM
+
+(cd backend && PORT="$backend_port" HOST="$backend_host" DATA_DIR="$root_dir/data" SHEETS_CONFIG="$root_dir/config/sheets.json" PDF_ROOT="$root_dir/data/pdfs" npx tsx watch src/api/server.ts) &
+backend_pid=$!
+
+(cd frontend && BACKEND_PORT="$backend_port" npx vite) &
+frontend_pid=$!
+
+while true; do
+  if ! kill -0 "$backend_pid" 2>/dev/null; then
+    wait "$backend_pid"
+    exit $?
+  fi
+  if ! kill -0 "$frontend_pid" 2>/dev/null; then
+    wait "$frontend_pid"
+    exit $?
+  fi
+  sleep 1
+done
