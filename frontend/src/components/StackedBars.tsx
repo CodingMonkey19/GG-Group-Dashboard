@@ -11,7 +11,7 @@
  * lines up between StackedBars and DonutChart.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   PROJECT_OTHER_COLOR,
   PROJECT_PALETTE,
@@ -97,6 +97,55 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
 
   const [hover, setHover] = useState<number | null>(null);
 
+  // Pin state: when the operator clicks a bar, the popup locks to that
+  // bar at the click position. Mouse movement no longer changes which
+  // month is shown or where the popup sits — they can freely scroll
+  // inside it. Press Esc (or click the same bar again, or click a
+  // different bar to re-pin) to release.
+  const [pinned, setPinned] = useState<number | null>(null);
+  const [pinnedMouse, setPinnedMouse] = useState<{ x: number; y: number } | null>(null);
+
+  // Mouse position relative to the wrap, in pixels. The popup follows the
+  // cursor (to the right) so the operator can move toward it without
+  // crossing other bars. Updated only on SVG mousemove — entering the
+  // popup itself freezes the position so it can be scrolled.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [mouseInWrap, setMouseInWrap] = useState<{ x: number; y: number } | null>(null);
+
+  // Esc to unpin.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && pinned !== null) {
+        setPinned(null);
+        setPinnedMouse(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pinned]);
+
+  const onBarClick = (i: number): void => {
+    if (pinned === i) {
+      // Click the already-pinned bar → unpin.
+      setPinned(null);
+      setPinnedMouse(null);
+    } else {
+      // Pin to this bar at the current cursor position.
+      setPinned(i);
+      setPinnedMouse(mouseInWrap);
+    }
+  };
+
+  const onSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>): void => {
+    const wrap = wrapRef.current;
+    if (wrap === null) return;
+    const rect = wrap.getBoundingClientRect();
+    setMouseInWrap({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+
   const processed: ProcessedMonth[] =
     data.length > 0 ? data.map(processMonth) : [{ m: '—', total: 0, stacks: [] }];
 
@@ -107,17 +156,77 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
   const slot = innerW / processed.length;
   const bw = Math.min(slot * 0.62, 56);
 
-  const hoveredMonth = hover !== null ? processed[hover] ?? null : null;
+  // `active` = the bar the popup is showing. Pin wins over hover.
+  const active = pinned !== null ? pinned : hover;
+  const hoveredMonth = active !== null ? processed[active] ?? null : null;
+
+  // Build the popup positioning style. Pinned position wins over live
+  // cursor; falls back to top-right when nothing is hovered.
+  //
+  // Edge-case handling:
+  //   • Rightmost bar — popup would overflow the right edge → flip to the
+  //     LEFT of the cursor. If neither side fits (very narrow chart), pin
+  //     the popup to the right edge with a margin.
+  //   • Leftmost bar — default to the right (always fits because the chart
+  //     is much wider than 280px in normal use).
+  //   • Bottom bar — popup anchored at `cursor.y - 12` would hang below
+  //     the chart. Clamp the top so a `POPUP_TARGET_H`-tall popup always
+  //     fits inside, and set `max-height` dynamically so very long lists
+  //     scroll inside the popup instead of overflowing the chart panel.
+  //   • Top bar — already covered by clamping the top to `>= POPUP_MARGIN`.
+  const POPUP_W = 280;
+  const POPUP_TARGET_H = 240;
+  const POPUP_OFFSET = 16;
+  const POPUP_MARGIN = 12;
+  const popupStyle: CSSProperties = (() => {
+    const pos = pinnedMouse ?? mouseInWrap;
+    if (pos === null || hoveredMonth === null) {
+      return { top: POPUP_MARGIN, right: POPUP_MARGIN };
+    }
+    const wrap = wrapRef.current;
+    const wrapW = wrap?.clientWidth ?? 1000;
+    const wrapH = wrap?.clientHeight ?? 320;
+
+    // Horizontal — try right of cursor → flip left → pin to right edge.
+    let left = pos.x + POPUP_OFFSET;
+    if (left + POPUP_W + POPUP_MARGIN > wrapW) {
+      const flipped = pos.x - POPUP_OFFSET - POPUP_W;
+      left = flipped >= POPUP_MARGIN
+        ? flipped
+        : Math.max(POPUP_MARGIN, wrapW - POPUP_W - POPUP_MARGIN);
+    }
+
+    // Vertical — clamp so a typical-size popup fits inside the chart.
+    // The CSS `max-height` is recomputed below so long lists scroll
+    // inside the popup rather than running off the chart bottom.
+    const desiredTop = pos.y - 12;
+    const maxTop = Math.max(POPUP_MARGIN, wrapH - POPUP_TARGET_H - POPUP_MARGIN);
+    const top = Math.max(POPUP_MARGIN, Math.min(maxTop, desiredTop));
+    const maxHeight = Math.max(80, wrapH - top - POPUP_MARGIN);
+
+    return { left, top, right: 'auto', maxHeight };
+  })();
 
   return (
-    <div className="stacked-wrap">
+    // onMouseLeave on the WRAP (not the SVG) so hover persists when the
+    // cursor moves from the bar to the popup overlay. The popup itself is
+    // interactive (scrollable); mousemove tracking is on the SVG only so
+    // the popup freezes when the cursor enters it.
+    <div
+      ref={wrapRef}
+      className="stacked-wrap"
+      onMouseLeave={() => {
+        setHover(null);
+        setMouseInWrap(null);
+      }}
+    >
       <svg
         className="chart"
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="Spend per month"
-        onMouseLeave={() => setHover(null)}
+        onMouseMove={onSvgMouseMove}
       >
         {ticks.map((t, i) => {
           const y = padT + innerH - (t / topTick) * innerH;
@@ -133,13 +242,21 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
 
         {processed.map((d, i) => {
           const x = padL + i * slot + (slot - bw) / 2;
-          const isActive = hover === i;
+          // `isActive` and the dim styling honor the PINNED bar (if any)
+          // first, then live hover. While pinned, mouse movement does
+          // not change which bar shows the stack.
+          const isActive = active === i;
           const totalH = (d.total / topTick) * innerH;
           const barTopY = padT + innerH - totalH;
 
           if (!isActive) {
             return (
-              <g key={`bar-${d.m}-${i}`} onMouseEnter={() => setHover(i)}>
+              <g
+                key={`bar-${d.m}-${i}`}
+                onMouseEnter={() => setHover(i)}
+                onClick={() => onBarClick(i)}
+                style={{ cursor: 'pointer' }}
+              >
                 <rect
                   x={padL + i * slot}
                   y={padT}
@@ -153,7 +270,7 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
                   width={bw}
                   height={totalH}
                   fill="var(--accent-2)"
-                  opacity={hover === null ? 1 : 0.4}
+                  opacity={active === null ? 1 : 0.4}
                   rx="3"
                 />
                 <text
@@ -192,7 +309,12 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
             };
           });
           return (
-            <g key={`bar-${d.m}-${i}`} onMouseEnter={() => setHover(i)}>
+            <g
+              key={`bar-${d.m}-${i}`}
+              onMouseEnter={() => setHover(i)}
+              onClick={() => onBarClick(i)}
+              style={{ cursor: 'pointer' }}
+            >
               <rect
                 x={padL + i * slot}
                 y={padT}
@@ -233,17 +355,25 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
       </svg>
 
       {hoveredMonth !== null && hoveredMonth.total > 0 && (
-        <div className="stacked__popup">
+        <div className="stacked__popup" style={popupStyle}>
           <div className="stacked__popup-head">
             <span className="stacked__popup-title">
               {monthShortStr(hoveredMonth.m)} {hoveredMonth.m.split('-')[0]}
+              {pinned !== null && (
+                <span className="stacked__popup-pin-hint" title="Click bar or press Esc to release">
+                  {' '}· pinned (Esc)
+                </span>
+              )}
             </span>
             <span className="stacked__popup-total">{fmtEur(hoveredMonth.total)}</span>
           </div>
           <ul className="stacked__popup-list">
             {hoveredMonth.stacks
               .slice()
-              .reverse()
+              // Sort by spend descending — highest contributor first. The
+              // raw `stacks` array is in global-rank order (palette-stable
+              // across months); the popup needs THIS month's rank.
+              .sort((a, b) => b.value - a.value)
               .map((s, i) => (
                 <li key={`${s.code}-${i}`}>
                   <span className="stacked__popup-swatch" style={{ background: s.color }} />

@@ -191,6 +191,9 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
         </thead>
         <tbody>
           {sorted.map((r) => {
+            // websiteCurrentPrices guarantees current_price_live_url is set
+            // (it filters out rows with no col L); fallback kept for the
+            // legacy back-compat path where tests pass rows with null.
             const displayUrl = r.current_price_live_url ?? r.website;
             const href = safeExternalHref(displayUrl);
             const compact = compactUrl(displayUrl);

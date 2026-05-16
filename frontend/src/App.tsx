@@ -606,7 +606,10 @@ function WebsitesContent({
   onDrillDown: (d: DrawerState) => void;
 }): JSX.Element {
   const rows = useMemo(
-    () => websiteCurrentPrices(data, today, MIN_VISIBLE_YEAR_ROWS),
+    // requireLiveUrl=true → publishers whose latest dated row has no
+    // column-L value are dropped from the view (avoids showing a bare
+    // homepage as if it were a live URL).
+    () => websiteCurrentPrices(data, today, MIN_VISIBLE_YEAR_ROWS, true),
     [data, today],
   );
   return (

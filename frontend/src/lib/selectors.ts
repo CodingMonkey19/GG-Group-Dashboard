@@ -302,6 +302,13 @@ export function websiteCurrentPrices(
   data: ApiDataResponse,
   today: string = NO_FUTURE_FILTER,
   minRowsPerYear: number = 0,
+  /**
+   * When true, drop rows whose `live_url` (column L) is empty so the view
+   * doesn't fall back to showing a bare publisher domain (which looks like
+   * a homepage to the operator). Production passes true; legacy tests
+   * with pre-`live_url` fixtures default to false so they keep passing.
+   */
+  requireLiveUrl: boolean = false,
 ): WebsiteCurrentPrice[] {
   const noise = getNoiseYears(data, today, minRowsPerYear);
   const byWebsite = new Map<string, InvoiceRow[]>();
@@ -310,6 +317,10 @@ export function websiteCurrentPrices(
     if (!isNotFutureDated(row, today)) continue;
     if (!isVisibleYear(row, noise)) continue;
     if (row.website === null) continue;
+    if (requireLiveUrl) {
+      const live = row.live_url;
+      if (live === null || live === undefined || live.trim() === '') continue;
+    }
     const arr = byWebsite.get(row.website) ?? [];
     arr.push(row);
     byWebsite.set(row.website, arr);
