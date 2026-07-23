@@ -54,6 +54,7 @@ import { emitFindings } from './audit/findings.js';
 import { commitStaging } from './store/atomic-replace.js';
 import { openStagingStore, openStore } from './store/db.js';
 import { allocateRefreshEvent, writeConsolidation } from './store/write.js';
+import type { SnapshotMetadataInput } from './store/write.js';
 import { sanitizeErrorMessage } from '../shared/sanitize.js';
 
 export interface RunConsolidationOptions {
@@ -253,6 +254,7 @@ export async function runConsolidation(
     status,
     per_source: perSource,
     counters,
+    snapshot_metadata: snapshotMetadataForConfig(opts.config),
   });
 
   // NOTE: `completed` is NOT emitted here. The CLI wrapper consolidate()
@@ -273,6 +275,30 @@ export async function runConsolidation(
     invoice_rows_inserted: writeResult.invoice_rows_inserted,
     audit_findings_inserted: writeResult.audit_findings_inserted,
     refresh_id: writeResult.refresh_id,
+  };
+}
+
+/**
+ * Metadata is a snapshot boundary, not a best-effort provenance field. The
+ * executive report preserves its exact source; older modes get stable,
+ * nonempty identifiers while retaining the same v2/2026 contract.
+ */
+function snapshotMetadataForConfig(config: SheetsConfig): SnapshotMetadataInput {
+  if (config.report_source !== undefined) {
+    return {
+      source_spreadsheet_id: config.report_source.spreadsheet_id,
+      source_tab: config.report_source.data_tab,
+    };
+  }
+  if (config.folder_source !== undefined) {
+    return {
+      source_spreadsheet_id: `folder:${config.folder_source.drive_folder_id}`,
+      source_tab: 'configured-tabs',
+    };
+  }
+  return {
+    source_spreadsheet_id: 'legacy:configured-sheets',
+    source_tab: 'configured-tabs',
   };
 }
 

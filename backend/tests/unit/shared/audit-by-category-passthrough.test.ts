@@ -33,7 +33,8 @@ function emptyAuditByCategory(): Record<string, unknown[]> {
 
 function baseEnvelope() {
   return {
-    schema_version: 1 as const,
+    schema_version: 2 as const,
+    reporting_year: 2026 as const,
     last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success' as const,
     duration_ms: 1234,

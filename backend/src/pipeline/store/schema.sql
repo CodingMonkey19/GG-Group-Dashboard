@@ -1,4 +1,4 @@
--- GG Spend Dashboard — consolidated store schema (SQLite, v1).
+-- GG Spend Dashboard — consolidated store schema (SQLite, v2).
 -- See specs/001-spend-dashboard/data-model.md for the authoritative description.
 -- Aggregation queries MUST filter `WHERE is_done=1 AND conversion_status='converted'`.
 
@@ -7,6 +7,19 @@
 -- the staging file uses journal_mode=DELETE (single-file DB; no WAL sidecars
 -- to strand across renameSync).
 PRAGMA foreign_keys = ON;
+PRAGMA user_version = 2;
+
+-- ---------------------------------------------------------------------------
+-- snapshot_metadata : exactly one row, proving this is a v2 2026 snapshot.
+-- A refresh writes this in the same transaction as invoices/findings/completion.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS snapshot_metadata (
+  singleton_id          INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  schema_version        INTEGER NOT NULL CHECK (schema_version = 2),
+  reporting_year        INTEGER NOT NULL CHECK (reporting_year = 2026),
+  source_spreadsheet_id TEXT    NOT NULL CHECK (length(trim(source_spreadsheet_id)) > 0),
+  source_tab            TEXT    NOT NULL CHECK (length(trim(source_tab)) > 0)
+);
 
 -- ---------------------------------------------------------------------------
 -- invoices : every ingested row that survived ingest (Done + non-Done).
@@ -36,14 +49,20 @@ CREATE TABLE IF NOT EXISTS invoices (
   native_amount       REAL,
   native_currency     TEXT,
   eur_amount          REAL,
+  savings_eur         REAL    NOT NULL,
   ecb_rate            REAL,
   ecb_rate_as_of      TEXT,
   conversion_status   TEXT    NOT NULL CHECK (conversion_status IN (
                           'converted','missing_price','unparseable_amount',
                           'missing_currency','out_of_ecb_currency'
                         )),
-  invoice_date        TEXT,
-  invoice_month       TEXT,
+  invoice_date        TEXT    NOT NULL CHECK (
+                          invoice_date >= '2026-01-01' AND invoice_date < '2027-01-01'
+                        ),
+  invoice_month       TEXT    NOT NULL CHECK (
+                          invoice_month GLOB '2026-0[1-9]'
+                          OR invoice_month GLOB '2026-1[0-2]'
+                        ),
   date_source         TEXT    NOT NULL CHECK (date_source IN ('sheet','artifact','undated')),
   audit_flags         TEXT    NOT NULL DEFAULT '[]',
   ingested_at         TEXT    NOT NULL

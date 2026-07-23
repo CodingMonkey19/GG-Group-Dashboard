@@ -145,6 +145,8 @@ export const FolderSourceConfig = z
 export type FolderSourceConfig = z.infer<typeof FolderSourceConfig>;
 
 export const REPORTING_YEAR = 2026 as const;
+/** Version of the published, 2026-only API/store snapshot contract. */
+export const API_SCHEMA_VERSION = 2 as const;
 
 export const ReportSourceHeaderMapping = z
   .object({
@@ -260,12 +262,14 @@ export const InvoiceRow = z
     native_amount: z.number().nullable(),
     native_currency: z.string().min(3).max(3).nullable(),
     eur_amount: z.number().nullable(),
+    /** Raw EUR savings supplied by the source report; always finite in a v2 snapshot. */
+    savings_eur: z.number().finite(),
     /** ECB-native: foreign currency units per 1 EUR. EUR rows store rate=1.0. */
     ecb_rate: z.number().positive().nullable(),
     ecb_rate_as_of: IsoDate.nullable(),
     conversion_status: ConversionStatus,
-    invoice_date: IsoDate.nullable(),
-    invoice_month: IsoMonth.nullable(),
+    invoice_date: IsoDate,
+    invoice_month: IsoMonth,
     date_source: DateSource,
     audit_flags: z.array(z.string()),
   })
@@ -346,7 +350,8 @@ const AuditByCategoryShape = z
 
 export const ApiDataResponse = z
   .object({
-    schema_version: z.literal(1),
+    schema_version: z.literal(API_SCHEMA_VERSION),
+    reporting_year: z.literal(REPORTING_YEAR),
     last_refreshed_at: Iso8601Utc.nullable(),
     refresh_status: z.enum(['success', 'partial', 'failed', 'never_refreshed']),
     duration_ms: z.number().int().nonnegative().nullable(),
@@ -359,7 +364,26 @@ export const ApiDataResponse = z
     /** Every category key MUST be present (FR-022); value MAY be []. */
     audit_findings_by_category: AuditByCategoryShape,
   })
-  .strict();
+  .strict()
+  .superRefine((response, ctx) => {
+    for (let index = 0; index < response.invoices.length; index += 1) {
+      const invoice = response.invoices[index]!;
+      if (!invoice.invoice_date.startsWith(`${REPORTING_YEAR}-`)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['invoices', index, 'invoice_date'],
+          message: `invoice_date must be within ${REPORTING_YEAR}`,
+        });
+      }
+      if (!invoice.invoice_month.startsWith(`${REPORTING_YEAR}-`)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['invoices', index, 'invoice_month'],
+          message: `invoice_month must be within ${REPORTING_YEAR}`,
+        });
+      }
+    }
+  });
 export type ApiDataResponse = z.infer<typeof ApiDataResponse>;
 
 /* ----------------------------------------------------------------------- */

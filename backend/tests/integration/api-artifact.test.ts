@@ -41,14 +41,14 @@ function seedInvoice(db: DatabaseT, partial: SeedRow): void {
        source_row_key, invoice_id, order_code, spreadsheet_id, tab_name,
        tab_name_raw, row_index, work_status, is_done, payment_status,
        invoice_type, artifact_ref, artifact_status, website, website_raw,
-       native_amount, native_currency, eur_amount, ecb_rate, ecb_rate_as_of,
+       native_amount, native_currency, eur_amount, savings_eur, ecb_rate, ecb_rate_as_of,
        conversion_status, invoice_date, invoice_month, date_source,
        audit_flags, ingested_at
      ) VALUES (
        @source_row_key, NULL, @order_code, 'sheet-1', 'April 2026',
        'April 2026', @row_index, 'Done', 1, 'paid',
        @invoice_type, @artifact_ref, 'reachable', 'example.com', 'example.com',
-       100, 'EUR', 100, 1.0, '2026-04-01',
+       100, 'EUR', 100, 0, 1.0, '2026-04-01',
        'converted', '2026-04-01', '2026-04', 'sheet',
        '[]', '2026-04-01T00:00:00Z'
      )`,
@@ -68,12 +68,21 @@ function seedRefreshEvent(db: DatabaseT): void {
   ).run();
 }
 
+function seedSnapshotMetadata(db: DatabaseT): void {
+  db.prepare(
+    `INSERT INTO snapshot_metadata (
+       singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
+     ) VALUES (1, 2, 2026, 'REPORT_2026', 'Clean Data')`,
+  ).run();
+}
+
 /** Stand up a live consolidated store seeded with the given rows. */
 function buildLiveStore(dataDir: string, rows: SeedRow[]): void {
   const stagingPath = resolve(dataDir, 'consolidated.sqlite.new');
   const livePath = resolve(dataDir, 'consolidated.sqlite');
   const db = openStagingStore(stagingPath);
   try {
+    seedSnapshotMetadata(db);
     seedRefreshEvent(db);
     for (const r of rows) seedInvoice(db, r);
   } finally {

@@ -87,6 +87,15 @@ describe('report source consolidation', () => {
     const db = openStore(resolve(dataDir, 'consolidated.sqlite'));
     try {
       expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 3 });
+      const savings = db.prepare(
+        'SELECT order_code, invoice_month, savings_eur FROM invoices ORDER BY order_code, invoice_month',
+      ).all();
+      expect(savings).toEqual([
+        { order_code: 'ORDER-A', invoice_month: '2026-01', savings_eur: 10.005 },
+        { order_code: 'ORDER-A', invoice_month: '2026-07', savings_eur: 20 },
+        { order_code: 'ORDER-B', invoice_month: '2026-07', savings_eur: 5.125 },
+      ]);
+      expect(db.prepare('SELECT SUM(savings_eur) AS total FROM invoices').get()).toEqual({ total: 35.13 });
       const issue = db.prepare("SELECT audit_flags FROM invoices WHERE order_code='ORDER-B'").get() as { audit_flags: string };
       expect(JSON.parse(issue.audit_flags)).toContain('source_data_quality_issue:needs receipt');
       expect(db.prepare('SELECT COUNT(*) AS count FROM audit_findings').get()).toEqual({ count: 0 });
