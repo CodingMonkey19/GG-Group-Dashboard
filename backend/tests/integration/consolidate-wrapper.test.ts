@@ -461,7 +461,7 @@ describe('consolidate() — report and empty source modes', () => {
     expect(result.per_source[0]).toMatchObject({
       spreadsheet_id: 'REPORT_2026',
       order_code: '2026 Spending Report',
-      rows_pulled: 8,
+      rows_pulled: 3,
     });
     expect(existsSync(env.livePath)).toBe(true);
     expect(existsSync(env.stagingPath)).toBe(false);

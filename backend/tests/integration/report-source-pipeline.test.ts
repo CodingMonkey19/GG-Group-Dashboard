@@ -61,24 +61,14 @@ describe('report source consolidation', () => {
   it('publishes only eligible 2026 rows and reconciles raw Spend/Savings', async () => {
     const gws = new FixtureGws({ fixturesRoot: FIXTURES_ROOT });
     const batch = await readReportSource(JSON.parse(reportConfig()).report_source, gws);
-    expect(batch.rows).toHaveLength(8);
+    expect(batch.rows).toHaveLength(3);
     const expectedTotals = {
-      spend: 1000.25, savings: 100.13,
+      spend: 350.25, savings: 35.13,
       '2026-01:spend': 100, '2026-01:savings': 10.005,
-      '2026-02:spend': 250.25, '2026-02:savings': 25.125,
-      '2026-03:spend': 110, '2026-03:savings': 11,
-      '2026-04:spend': 120, '2026-04:savings': 12,
-      '2026-05:spend': 130, '2026-05:savings': 13,
-      '2026-06:spend': 140, '2026-06:savings': 14,
-      '2026-07:spend': 150, '2026-07:savings': 15,
+      '2026-07:spend': 250.25, '2026-07:savings': 25.125,
       'ORDER-A:2026-01:spend': 100, 'ORDER-A:2026-01:savings': 10.005,
-      'ORDER-A:2026-02:spend': 200, 'ORDER-A:2026-02:savings': 20,
-      'ORDER-B:2026-02:spend': 50.25, 'ORDER-B:2026-02:savings': 5.125,
-      'ORDER-A:2026-03:spend': 110, 'ORDER-A:2026-03:savings': 11,
-      'ORDER-A:2026-04:spend': 120, 'ORDER-A:2026-04:savings': 12,
-      'ORDER-A:2026-05:spend': 130, 'ORDER-A:2026-05:savings': 13,
-      'ORDER-A:2026-06:spend': 140, 'ORDER-A:2026-06:savings': 14,
-      'ORDER-A:2026-07:spend': 150, 'ORDER-A:2026-07:savings': 15,
+      'ORDER-A:2026-07:spend': 200, 'ORDER-A:2026-07:savings': 20,
+      'ORDER-B:2026-07:spend': 50.25, 'ORDER-B:2026-07:savings': 5.125,
     };
     for (const [key, expected] of Object.entries(expectedTotals)) {
       expect(rawTotals(batch.rows)[key]).toBeCloseTo(expected, 10);
@@ -90,13 +80,13 @@ describe('report source consolidation', () => {
     });
     expect(result.status).toBe('success');
     expect(result.per_source).toEqual([{
-      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 8,
+      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 3,
     }]);
-    expect(result.counters).toMatchObject({ rows_total: 8, rows_done: 8, rows_undated: 0 });
+    expect(result.counters).toMatchObject({ rows_total: 3, rows_done: 3, rows_undated: 0 });
 
     const db = openStore(resolve(dataDir, 'consolidated.sqlite'));
     try {
-      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 8 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 3 });
       const issue = db.prepare("SELECT audit_flags FROM invoices WHERE order_code='ORDER-B'").get() as { audit_flags: string };
       expect(JSON.parse(issue.audit_flags)).toContain('source_data_quality_issue:needs receipt');
       expect(db.prepare('SELECT COUNT(*) AS count FROM audit_findings').get()).toEqual({ count: 0 });

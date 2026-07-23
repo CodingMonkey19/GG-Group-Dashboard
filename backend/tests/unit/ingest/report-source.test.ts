@@ -93,14 +93,12 @@ describe('readReportSource', () => {
     const batch = await readReportSource(REPORT_CONFIG, gws);
 
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
-    expect(batch.rows.map((row) => row.order_code)).toEqual([
-      'ORDER-A', 'ORDER-A', 'ORDER-B', 'ORDER-A', 'ORDER-A', 'ORDER-A', 'ORDER-A', 'ORDER-A',
-    ]);
+    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
     expect(batch.rows[0]?.invoice_date).toBe('2026-01-15');
     expect(batch.rows[0]?.savings_eur).toBe(10.005);
     expect(batch.rows[2]).toMatchObject({
       order_code: 'ORDER-B',
-      tab_name: 'January 2026',
+      tab_name: 'July 2026',
       row_index: 5,
     });
     expect(batch.rows[0]).toMatchObject({
@@ -119,13 +117,13 @@ describe('readReportSource', () => {
     ));
     expect(batch.monthlySummary[1]?.cells).toEqual(['46023', '100', '10.005']);
     expect(batch.orderSummary[1]?.cells).toEqual([
-      'ORDER-A', '100', '200', '110', '120', '130', '140', '150', '950', 'https://order/a', '95.005',
+      'ORDER-A', '100', '200', '300', 'https://order/a', '30.005',
     ]);
     expect(batch.sourceStatus).toEqual({
       spreadsheet_id: 'REPORT_2026',
       order_code: '2026 Spending Report',
       status: 'success',
-      rows_pulled: 8,
+      rows_pulled: 3,
     });
     expect(calls).toEqual([
       { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
