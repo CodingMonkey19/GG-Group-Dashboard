@@ -1,14 +1,14 @@
 {
   "rows": [
-    ["Order", "Spend (EUR)", "Savings (EUR)"],
-    ["ORDER-A", "€300.00", "€30.01"],
-    ["ORDER-B", "€50.25", "€5.13"],
-    ["Total", "€350.25", "€35.13"]
+    ["Order", "January 2026 Spend (EUR)", "February 2026 Spend (EUR)", "March 2026 Spend (EUR)", "April 2026 Spend (EUR)", "May 2026 Spend (EUR)", "June 2026 Spend (EUR)", "July 1-22, 2026 Spend (EUR)", "Total Spend through July 22, 2026", "Link to Order tab", "Total Saving (EUR)"],
+    ["ORDER-A", "€100.00", "€200.00", "€110.00", "€120.00", "€130.00", "€140.00", "€150.00", "€950.00", "https://order/a", "€95.01"],
+    ["ORDER-B", "€0.00", "€50.25", "€0.00", "€0.00", "€0.00", "€0.00", "€0.00", "€50.25", "https://order/b", "€5.13"],
+    ["Total", "€100.00", "€250.25", "€110.00", "€120.00", "€130.00", "€140.00", "€150.00", "€1,000.25", "", "€100.13"]
   ],
   "unformatted_rows": [
-    ["Order", "Spend (EUR)", "Savings (EUR)"],
-    ["ORDER-A", 300, 30.005],
-    ["ORDER-B", 50.25, 5.125],
-    ["Total", 350.25, 35.13]
+    ["Order", "January 2026 Spend (EUR)", "February 2026 Spend (EUR)", "March 2026 Spend (EUR)", "April 2026 Spend (EUR)", "May 2026 Spend (EUR)", "June 2026 Spend (EUR)", "July 1-22, 2026 Spend (EUR)", "Total Spend through July 22, 2026", "Link to Order tab", "Total Saving (EUR)"],
+    ["ORDER-A", 100, 200, 110, 120, 130, 140, 150, 950, "https://order/a", 95.005],
+    ["ORDER-B", 0, 50.25, 0, 0, 0, 0, 0, 50.25, "https://order/b", 5.125],
+    ["Total", 100, 250.25, 110, 120, 130, 140, 150, 1000.25, "", 100.13]
   ]
 }

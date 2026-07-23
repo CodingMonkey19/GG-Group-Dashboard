@@ -93,7 +93,9 @@ describe('readReportSource', () => {
     const batch = await readReportSource(REPORT_CONFIG, gws);
 
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
-    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
+    expect(batch.rows.map((row) => row.order_code)).toEqual([
+      'ORDER-A', 'ORDER-A', 'ORDER-B', 'ORDER-A', 'ORDER-A', 'ORDER-A', 'ORDER-A', 'ORDER-A',
+    ]);
     expect(batch.rows[0]?.invoice_date).toBe('2026-01-15');
     expect(batch.rows[0]?.savings_eur).toBe(10.005);
     expect(batch.rows[2]).toMatchObject({
@@ -115,13 +117,15 @@ describe('readReportSource', () => {
       4,
       ['ORDER-A', 'January 2026', '5', '15/01/2026', 'January 2026', 'Ada', 'alpha.example', '€100.00', 'https://invoice/a-jan', 'Paid', 'TRUE', '', '€10.01'],
     ));
-    expect(batch.monthlySummary[1]?.cells).toEqual(['January 2026', '100', '10.005']);
-    expect(batch.orderSummary[1]?.cells).toEqual(['ORDER-A', '300', '30.005']);
+    expect(batch.monthlySummary[1]?.cells).toEqual(['46023', '100', '10.005']);
+    expect(batch.orderSummary[1]?.cells).toEqual([
+      'ORDER-A', '100', '200', '110', '120', '130', '140', '150', '950', 'https://order/a', '95.005',
+    ]);
     expect(batch.sourceStatus).toEqual({
       spreadsheet_id: 'REPORT_2026',
       order_code: '2026 Spending Report',
       status: 'success',
-      rows_pulled: 3,
+      rows_pulled: 8,
     });
     expect(calls).toEqual([
       { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
@@ -213,6 +217,7 @@ describe('readReportSource', () => {
       setPairedCell(clean, 4, 3, '2/6/2026');
       setPairedCell(clean, 4, 4, 'February 2026');
       setPairedCell(clean, 5, 10, 'FALSE');
+      for (let index = 8; index < clean.rows.length; index += 1) setPairedCell(clean, index, 10, 'FALSE');
     });
     const usBatch = await readReportSource(REPORT_CONFIG, us.gws);
     expect(usBatch.rows.map((row) => row.invoice_date)).toEqual(['2026-02-27', '2026-02-06']);
@@ -231,6 +236,7 @@ describe('readReportSource', () => {
       setPairedCell(clean, 5, 2, '7');
       setPairedCell(clean, 5, 3, '2/3/2026');
       setPairedCell(clean, 5, 4, 'March 2026');
+      for (let index = 8; index < clean.rows.length; index += 1) setPairedCell(clean, index, 10, 'FALSE');
     });
     await expect(readReportSource(REPORT_CONFIG, mixed.gws)).rejects.toThrow('invalid or missing Invoice Date');
   });

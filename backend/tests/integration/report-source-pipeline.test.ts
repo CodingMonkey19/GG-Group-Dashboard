@@ -32,25 +32,18 @@ function reportConfig(): string {
 function rawTotals(rows: Awaited<ReturnType<typeof readReportSource>>['rows']): Record<string, number> {
   const spend = rows.reduce((total, row) => total + Number(row.price), 0);
   const savings = rows.reduce((total, row) => total + row.savings_eur, 0);
-  const january = rows.filter((row) => row.invoice_date?.slice(0, 7) === '2026-01');
-  const february = rows.filter((row) => row.invoice_date?.slice(0, 7) === '2026-02');
-  const orderA = rows.filter((row) => row.order_code === 'ORDER-A');
-  const orderB = rows.filter((row) => row.order_code === 'ORDER-B');
-  return {
-    spend,
-    savings,
-    januarySpend: january.reduce((total, row) => total + Number(row.price), 0),
-    januarySavings: january.reduce((total, row) => total + row.savings_eur, 0),
-    februarySpend: february.reduce((total, row) => total + Number(row.price), 0),
-    februarySavings: february.reduce((total, row) => total + row.savings_eur, 0),
-    orderASpend: orderA.reduce((total, row) => total + Number(row.price), 0),
-    orderASavings: orderA.reduce((total, row) => total + row.savings_eur, 0),
-    orderBSpend: orderB.reduce((total, row) => total + Number(row.price), 0),
-    orderBSavings: orderB.reduce((total, row) => total + row.savings_eur, 0),
-    orderAJanuarySpend: Number(orderA.find((row) => row.invoice_date?.slice(0, 7) === '2026-01')?.price),
-    orderAFebruarySpend: Number(orderA.find((row) => row.invoice_date?.slice(0, 7) === '2026-02')?.price),
-    orderBFebruarySpend: Number(orderB.find((row) => row.invoice_date?.slice(0, 7) === '2026-02')?.price),
-  };
+  const out: Record<string, number> = { spend, savings };
+  for (const row of rows) {
+    const month = row.invoice_date?.slice(0, 7);
+    if (month === undefined) continue;
+    const monthKey = `${month}:`;
+    const orderMonthKey = `${row.order_code}:${month}`;
+    out[`${monthKey}spend`] = (out[`${monthKey}spend`] ?? 0) + Number(row.price);
+    out[`${monthKey}savings`] = (out[`${monthKey}savings`] ?? 0) + row.savings_eur;
+    out[`${orderMonthKey}:spend`] = (out[`${orderMonthKey}:spend`] ?? 0) + Number(row.price);
+    out[`${orderMonthKey}:savings`] = (out[`${orderMonthKey}:savings`] ?? 0) + row.savings_eur;
+  }
+  return out;
 }
 
 describe('report source consolidation', () => {
@@ -65,17 +58,27 @@ describe('report source consolidation', () => {
 
   afterEach(() => rmSync(dataDir, { recursive: true, force: true }));
 
-  it('publishes only the three eligible 2026 rows and reconciles raw Spend/Savings', async () => {
+  it('publishes only eligible 2026 rows and reconciles raw Spend/Savings', async () => {
     const gws = new FixtureGws({ fixturesRoot: FIXTURES_ROOT });
     const batch = await readReportSource(JSON.parse(reportConfig()).report_source, gws);
-    expect(batch.rows).toHaveLength(3);
+    expect(batch.rows).toHaveLength(8);
     const expectedTotals = {
-      spend: 350.25, savings: 35.13,
-      januarySpend: 100, januarySavings: 10.005,
-      februarySpend: 250.25, februarySavings: 25.125,
-      orderASpend: 300, orderASavings: 30.005,
-      orderBSpend: 50.25, orderBSavings: 5.125,
-      orderAJanuarySpend: 100, orderAFebruarySpend: 200, orderBFebruarySpend: 50.25,
+      spend: 1000.25, savings: 100.13,
+      '2026-01:spend': 100, '2026-01:savings': 10.005,
+      '2026-02:spend': 250.25, '2026-02:savings': 25.125,
+      '2026-03:spend': 110, '2026-03:savings': 11,
+      '2026-04:spend': 120, '2026-04:savings': 12,
+      '2026-05:spend': 130, '2026-05:savings': 13,
+      '2026-06:spend': 140, '2026-06:savings': 14,
+      '2026-07:spend': 150, '2026-07:savings': 15,
+      'ORDER-A:2026-01:spend': 100, 'ORDER-A:2026-01:savings': 10.005,
+      'ORDER-A:2026-02:spend': 200, 'ORDER-A:2026-02:savings': 20,
+      'ORDER-B:2026-02:spend': 50.25, 'ORDER-B:2026-02:savings': 5.125,
+      'ORDER-A:2026-03:spend': 110, 'ORDER-A:2026-03:savings': 11,
+      'ORDER-A:2026-04:spend': 120, 'ORDER-A:2026-04:savings': 12,
+      'ORDER-A:2026-05:spend': 130, 'ORDER-A:2026-05:savings': 13,
+      'ORDER-A:2026-06:spend': 140, 'ORDER-A:2026-06:savings': 14,
+      'ORDER-A:2026-07:spend': 150, 'ORDER-A:2026-07:savings': 15,
     };
     for (const [key, expected] of Object.entries(expectedTotals)) {
       expect(rawTotals(batch.rows)[key]).toBeCloseTo(expected, 10);
@@ -87,13 +90,13 @@ describe('report source consolidation', () => {
     });
     expect(result.status).toBe('success');
     expect(result.per_source).toEqual([{
-      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 3,
+      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 8,
     }]);
-    expect(result.counters).toMatchObject({ rows_total: 3, rows_done: 3, rows_undated: 0 });
+    expect(result.counters).toMatchObject({ rows_total: 8, rows_done: 8, rows_undated: 0 });
 
     const db = openStore(resolve(dataDir, 'consolidated.sqlite'));
     try {
-      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 3 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 8 });
       const issue = db.prepare("SELECT audit_flags FROM invoices WHERE order_code='ORDER-B'").get() as { audit_flags: string };
       expect(JSON.parse(issue.audit_flags)).toContain('source_data_quality_issue:needs receipt');
       expect(db.prepare('SELECT COUNT(*) AS count FROM audit_findings').get()).toEqual({ count: 0 });

@@ -124,22 +124,24 @@ export async function normalizeRow(
   // Clean Data's validated invoice date is authoritative for report rows.
   // Still classify and retain the artifact reference for the artifact route,
   // but never inspect PDF/Drive metadata during a report refresh.
-  if (!isReportRow && invoice_type === 'paypal' && artifact_ref !== null) {
-    const r = extractPaypal(artifact_ref);
-    artifact_invoice_id = r.invoice_id;
-    artifact_status = r.artifact_status; // always 'not_attempted' in v1
-  } else if (invoice_type === 'pdf' && artifact_ref !== null) {
-    const r = await extractPdf(artifact_ref, { pdfRoot: options.pdfRoot });
-    artifact_status = r.artifact_status;
-    artifact_unreachable_reason = r.reason;
-    artifact_date = r.date;
-    if (artifact_status === 'unreachable') audit_flags.push('artifact_unreachable');
-  } else if (invoice_type === 'drive_pdf' && artifact_ref !== null) {
-    const r = await extractDrivePdf(artifact_ref, options.gws);
-    artifact_status = r.artifact_status;
-    artifact_unreachable_reason = r.reason;
-    artifact_date = r.date;
-    if (artifact_status === 'unreachable') audit_flags.push('artifact_unreachable');
+  if (!isReportRow) {
+    if (invoice_type === 'paypal' && artifact_ref !== null) {
+      const r = extractPaypal(artifact_ref);
+      artifact_invoice_id = r.invoice_id;
+      artifact_status = r.artifact_status; // always 'not_attempted' in v1
+    } else if (invoice_type === 'pdf' && artifact_ref !== null) {
+      const r = await extractPdf(artifact_ref, { pdfRoot: options.pdfRoot });
+      artifact_status = r.artifact_status;
+      artifact_unreachable_reason = r.reason;
+      artifact_date = r.date;
+      if (artifact_status === 'unreachable') audit_flags.push('artifact_unreachable');
+    } else if (invoice_type === 'drive_pdf' && artifact_ref !== null) {
+      const r = await extractDrivePdf(artifact_ref, options.gws);
+      artifact_status = r.artifact_status;
+      artifact_unreachable_reason = r.reason;
+      artifact_date = r.date;
+      if (artifact_status === 'unreachable') audit_flags.push('artifact_unreachable');
+    }
   }
   // intuit / text / missing → artifact_status stays 'not_attempted'.
 
