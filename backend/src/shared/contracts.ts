@@ -144,26 +144,63 @@ export const FolderSourceConfig = z
   .strict();
 export type FolderSourceConfig = z.infer<typeof FolderSourceConfig>;
 
+export const REPORTING_YEAR = 2026 as const;
+
+export const ReportSourceHeaderMapping = z
+  .object({
+    order: z.string().min(1),
+    source_tab: z.string().min(1),
+    source_row: z.string().min(1),
+    invoice_date: z.string().min(1),
+    reporting_month: z.string().min(1),
+    link_builder: z.string().min(1),
+    website: z.string().min(1),
+    spend_eur: z.string().min(1),
+    invoice_url: z.string().min(1),
+    invoice_status: z.string().min(1),
+    included: z.string().min(1),
+    data_quality_issue: z.string().min(1),
+    savings_eur: z.string().min(1),
+  })
+  .strict();
+export type ReportSourceHeaderMapping = z.infer<typeof ReportSourceHeaderMapping>;
+
+export const ReportSourceConfig = z
+  .object({
+    spreadsheet_id: z.string().min(1),
+    data_tab: z.string().min(1),
+    monthly_summary_tab: z.string().min(1),
+    order_summary_tab: z.string().min(1),
+    reporting_year: z.literal(REPORTING_YEAR),
+    headers: ReportSourceHeaderMapping,
+  })
+  .strict();
+export type ReportSourceConfig = z.infer<typeof ReportSourceConfig>;
+
 export const SheetsConfig = z
   .object({
     schema_version: z.literal(1),
     /** Map canonical tab name → known misspelled variant the sheet actually uses. */
     tab_aliases: z.record(z.string().min(1), z.string().min(1)).optional(),
+    report_source: ReportSourceConfig.optional(),
     folder_source: FolderSourceConfig.optional(),
     /**
      * Legacy/static source mode kept for deterministic tests and one-off
-     * fixtures. Production config should use folder_source so original
+     * fixtures. Production config should use report_source so original
      * spreadsheet IDs never become the dashboard source of truth again.
      */
     sheets: z.array(SheetEntry).optional().default([]),
   })
   .strict()
   .superRefine((cfg, ctx) => {
-    if (cfg.folder_source === undefined && cfg.sheets.length === 0) {
+    const sourceModeCount = Number(cfg.report_source !== undefined)
+      + Number(cfg.folder_source !== undefined)
+      + Number(cfg.sheets.length > 0);
+    if (sourceModeCount !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['sheets'],
-        message: 'Either folder_source or at least one static sheet entry is required.',
+        path: [],
+        message: 'Exactly one source mode is required: report_source, folder_source, or non-empty sheets.',
       });
     }
     const seen = new Set<string>();

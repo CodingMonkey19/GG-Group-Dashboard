@@ -1,23 +1,25 @@
 {
   "schema_version": 1,
-  "folder_source": {
-    "drive_folder_id": "1xKJmpTDMVKLGLLnGBsOjHdEMHxiDsdTl",
-    "copy_name_suffix": " (Invoice Audit 2026-05-12)",
-    "excluded_order_codes": [
-      "GG Group Status",
-      "Central LT"
-    ],
-    "standard_column_mapping": {
-      "status": "A",
-      "link_builder": "B",
-      "website": "C",
-      "price": "G",
-      "target_url": "I",
-      "anchor": "J",
-      "live_url": "L",
-      "invoice_date": "M",
-      "invoice_url": "N",
-      "invoice_status": "O"
+  "report_source": {
+    "spreadsheet_id": "1EjaH69wwJEMF52gn1HEEY4skM4GRoOmdyyHStVhmHPs",
+    "data_tab": "Clean Data",
+    "monthly_summary_tab": "Monthly Spending",
+    "order_summary_tab": "Order Summary",
+    "reporting_year": 2026,
+    "headers": {
+      "order": "Order",
+      "source_tab": "Source Tab",
+      "source_row": "Source Row",
+      "invoice_date": "Invoice Date",
+      "reporting_month": "Month",
+      "link_builder": "Link Builder",
+      "website": "Website",
+      "spend_eur": "Price (EUR)",
+      "invoice_url": "Invoice",
+      "invoice_status": "Invoice Status",
+      "included": "Included in Reporting Period",
+      "data_quality_issue": "Data Quality Issue",
+      "savings_eur": "Saving (EUR)"
     }
   }
 }
