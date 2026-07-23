@@ -1,0 +1,22 @@
+{
+  "rows": [
+    ["Order", "Source Tab", "Source Row", "Invoice Date", "Month", "Link Builder", "Website", "Price (EUR)", "Invoice", "Invoice Status", "Included in Reporting Period", "Data Quality Issue", "Saving (EUR)"],
+    ["ORDER-HIST-2024", "January 2024", "3", "15/01/2024", "January 2024", "Ada", "old-2024.example", "€40.00", "https://invoice/2024", "Paid", "TRUE", "", "€4.00"],
+    ["ORDER-HIST-2025", "December 2025", "4", "15/12/2025", "December 2025", "Ada", "old-2025.example", "€50.00", "https://invoice/2025", "Paid", "TRUE", "", "€5.00"],
+    ["ORDER-A", "January 2026", "5", "15/01/2026", "January 2026", "Ada", "alpha.example", "€100.00", "https://invoice/a-jan", "Paid", "TRUE", "", "€10.01"],
+    ["ORDER-A", "February 2026", "8", "10/02/2026", "February 2026", "Ada", "beta.example", "€200.00", "https://invoice/a-feb", "Pending", "TRUE", "", "€20.00"],
+    ["ORDER-B", "February 2026", "12", "20/02/2026", "February 2026", "Bea", "bravo.example", "€50.25", "https://invoice/b-feb", "Paid", "TRUE", "needs receipt", "€5.13"],
+    ["ORDER-FUTURE", "January 2028", "2", "15/01/2028", "January 2028", "Ada", "future.example", "€70.00", "https://invoice/2028", "Paid", "TRUE", "", "€7.00"],
+    ["ORDER-UNDATED", "Undated", "1", "", "", "Ada", "undated.example", "€80.00", "https://invoice/undated", "Paid", "FALSE", "", "€8.00"]
+  ],
+  "unformatted_rows": [
+    ["Order", "Source Tab", "Source Row", "Invoice Date", "Month", "Link Builder", "Website", "Price (EUR)", "Invoice", "Invoice Status", "Included in Reporting Period", "Data Quality Issue", "Saving (EUR)"],
+    ["ORDER-HIST-2024", "January 2024", 3, "15/01/2024", "January 2024", "Ada", "old-2024.example", 40, "https://invoice/2024", "Paid", true, "", 4],
+    ["ORDER-HIST-2025", "December 2025", 4, "15/12/2025", "December 2025", "Ada", "old-2025.example", 50, "https://invoice/2025", "Paid", true, "", 5],
+    ["ORDER-A", "January 2026", 5, "15/01/2026", "January 2026", "Ada", "alpha.example", 100, "https://invoice/a-jan", "Paid", true, "", 10.005],
+    ["ORDER-A", "February 2026", 8, "10/02/2026", "February 2026", "Ada", "beta.example", 200, "https://invoice/a-feb", "Pending", true, "", 20],
+    ["ORDER-B", "February 2026", 12, "20/02/2026", "February 2026", "Bea", "bravo.example", 50.25, "https://invoice/b-feb", "Paid", true, "needs receipt", 5.125],
+    ["ORDER-FUTURE", "January 2028", 2, "15/01/2028", "January 2028", "Ada", "future.example", 70, "https://invoice/2028", "Paid", true, "", 7],
+    ["ORDER-UNDATED", "Undated", 1, "", "", "Ada", "undated.example", 80, "https://invoice/undated", "Paid", false, "", 8]
+  ]
+}

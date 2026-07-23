@@ -9,7 +9,8 @@
  *   tests/fixtures/sheets/
  *     <spreadsheet_id>/
  *       __tabs.json       → ["Tab 1", "Previous Orders", ...]
- *       <tab>.json        → { rows: string[][] }   (one file per tab)
+ *       <tab>.json        → { rows: string[][], unformatted_rows?: unknown[][] }
+ *                            (one file per tab)
  *
  * If a spreadsheet_id has no fixture, calls reject with GwsNotFoundError.
  * If a specific tab has no fixture, listTabs may still return its name but
@@ -29,6 +30,7 @@ import {
   type DriveFileMetadata,
   type FolderSpreadsheet,
   type GwsWrapper,
+  type PullSheetOptions,
   type RawRow,
 } from '../../../src/pipeline/ingest/gws.js';
 
@@ -114,17 +116,28 @@ export class FixtureGws implements GwsWrapper {
   }
 
   async pullSheet(spreadsheetId: string, tab: string): Promise<RawRow[]> {
+    return this.pullSheetValues(spreadsheetId, tab);
+  }
+
+  private async pullSheetValues(
+    spreadsheetId: string,
+    tab: string,
+    options: PullSheetOptions = {},
+  ): Promise<RawRow[]> {
     this.throwIfInjectedFailure(spreadsheetId);
     const tabPath = resolve(this.fixturesRoot, spreadsheetId, `${tab}.json`);
     if (!existsSync(tabPath)) {
       throw new GwsNotFoundError(`fixture: no fixture for ${spreadsheetId}/${tab}`);
     }
     const raw = readFileSync(tabPath, 'utf8');
-    const parsed = JSON.parse(raw) as { rows?: unknown };
-    if (!Array.isArray(parsed.rows)) {
+    const parsed = JSON.parse(raw) as { rows?: unknown; unformatted_rows?: unknown };
+    const selectedRows = options.valueRenderOption === 'UNFORMATTED_VALUE'
+      ? parsed.unformatted_rows ?? parsed.rows
+      : parsed.rows;
+    if (!Array.isArray(selectedRows)) {
       throw new GwsError(`fixture: ${spreadsheetId}/${tab}.json missing 'rows' array`);
     }
-    return parsed.rows.map((cells, idx) => {
+    return selectedRows.map((cells, idx) => {
       if (!Array.isArray(cells)) {
         throw new GwsError(
           `fixture: ${spreadsheetId}/${tab}.json row ${idx + 1} is not an array`,
@@ -137,8 +150,13 @@ export class FixtureGws implements GwsWrapper {
     });
   }
 
-  async pullSheetRange(spreadsheetId: string, tab: string, a1Range: string): Promise<RawRow[]> {
-    const rows = await this.pullSheet(spreadsheetId, tab);
+  async pullSheetRange(
+    spreadsheetId: string,
+    tab: string,
+    a1Range: string,
+    options?: PullSheetOptions,
+  ): Promise<RawRow[]> {
+    const rows = await this.pullSheetValues(spreadsheetId, tab, options);
     const rowMatch = /[A-Z]+(\d+)/i.exec(a1Range);
     const startRow = rowMatch ? Number.parseInt(rowMatch[1]!, 10) : 1;
     const endMatch = /:[A-Z]+(\d+)/i.exec(a1Range);

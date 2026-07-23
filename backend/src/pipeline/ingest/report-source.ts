@@ -1,0 +1,238 @@
+/**
+ * Strict reader for the executive 2026 workbook.
+ *
+ * Clean Data is read twice: formatted cells retain operator-facing text and
+ * provenance, while unformatted cells preserve the full source precision of
+ * Spend and Savings. This module intentionally stops at ingestion; report
+ * reconciliation and pipeline wiring are separate checkpoints.
+ */
+
+import type { ReportSourceConfig } from '../../shared/contracts.js';
+import type { PerSourceStatus } from '../../shared/contracts.js';
+import { parseDateCell } from '../normalize/date-resolution.js';
+import { sourceRowKey } from '../normalize/source-row-key.js';
+import type { AdapterRow } from './sheet-adapter.js';
+import type { GwsWrapper, RawRow } from './gws.js';
+
+const REPORT_RANGE = 'A1:Z5001';
+const MAX_DATA_ROWS = 5_000;
+
+export interface ReportSourceBatch {
+  rows: AdapterRow[];
+  monthlySummary: RawRow[];
+  orderSummary: RawRow[];
+  sourceStatus: PerSourceStatus;
+}
+
+export class ReportSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReportSourceError';
+  }
+}
+
+/** Read and validate the report source without wiring it into consolidation. */
+export async function readReportSource(
+  config: ReportSourceConfig,
+  gws: GwsWrapper,
+): Promise<ReportSourceBatch> {
+  if (gws.pullSheetRange === undefined) {
+    throw new ReportSourceError('report source requires GwsWrapper.pullSheetRange');
+  }
+
+  const [formattedRows, unformattedRows, monthlySummary, orderSummary] = await Promise.all([
+    gws.pullSheetRange(config.spreadsheet_id, config.data_tab, REPORT_RANGE, {
+      valueRenderOption: 'FORMATTED_VALUE',
+    }),
+    gws.pullSheetRange(config.spreadsheet_id, config.data_tab, REPORT_RANGE, {
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    }),
+    gws.pullSheetRange(config.spreadsheet_id, config.monthly_summary_tab, REPORT_RANGE, {
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    }),
+    gws.pullSheetRange(config.spreadsheet_id, config.order_summary_tab, REPORT_RANGE, {
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    }),
+  ]);
+
+  validatePairAlignment(formattedRows, unformattedRows, config.data_tab);
+  if (formattedRows.length === 0) {
+    throw new ReportSourceError(`report data tab ${config.data_tab} has no header row`);
+  }
+  if (formattedRows.length - 1 > MAX_DATA_ROWS) {
+    throw new ReportSourceError(`report data tab exceeds ${MAX_DATA_ROWS} data rows`);
+  }
+
+  const columns = resolveRequiredColumns(formattedRows[0]!.cells, config);
+  const rows: AdapterRow[] = [];
+  const seenSourceIdentities = new Set<string>();
+
+  for (let index = 1; index < formattedRows.length; index += 1) {
+    const formatted = formattedRows[index]!;
+    const unformatted = unformattedRows[index]!;
+    const included = formattedCell(formatted, columns.included);
+    if (included !== 'TRUE') continue;
+
+    const invoiceDate = parseDateCell(formattedCell(formatted, columns.invoice_date));
+    if (invoiceDate === null) {
+      throw rowError(formatted, 'included row has an invalid or missing Invoice Date');
+    }
+    if (!isReportingYear(invoiceDate, config.reporting_year)) continue;
+
+    const orderCode = formattedCell(formatted, columns.order).trim();
+    if (orderCode.length === 0) throw rowError(formatted, 'included 2026 row has a blank Order');
+
+    const sourceTab = formattedCell(formatted, columns.source_tab).trim();
+    if (sourceTab.length === 0) throw rowError(formatted, 'included 2026 row has a blank Source Tab');
+    const sourceRow = parseSourceRow(formattedCell(formatted, columns.source_row));
+    if (sourceRow === null) throw rowError(formatted, 'included 2026 row has an invalid Source Row');
+
+    const sourceIdentity = `${sourceTab}\u001f${sourceRow}`;
+    if (seenSourceIdentities.has(sourceIdentity)) {
+      throw rowError(formatted, `duplicate source identity ${sourceTab}/${sourceRow}`);
+    }
+    seenSourceIdentities.add(sourceIdentity);
+
+    const spend = parseRawMoney(unformattedCell(unformatted, columns.spend_eur));
+    if (spend === null) throw rowError(formatted, 'included 2026 row has invalid Price (EUR)');
+    const savings = parseRawMoney(unformattedCell(unformatted, columns.savings_eur));
+    if (savings === null) throw rowError(formatted, 'included 2026 row has invalid Saving (EUR)');
+
+    const reportingMonth = parseReportingMonth(formattedCell(formatted, columns.reporting_month));
+    if (reportingMonth === null || reportingMonth !== invoiceDate.slice(0, 7)) {
+      throw rowError(formatted, `Month does not match Invoice Date ${invoiceDate}`);
+    }
+
+    rows.push({
+      spreadsheet_id: config.spreadsheet_id,
+      order_code: orderCode,
+      // The executive tab/row identifies a report record, but provenance shown
+      // to an operator remains the original source tab and source row.
+      tab_name: sourceTab,
+      tab_name_raw: sourceTab,
+      row_index: sourceRow,
+      source_row_key: sourceRowKey(
+        config.spreadsheet_id,
+        config.data_tab,
+        formatted.row_index,
+        formatted.cells,
+      ),
+      status: 'Done',
+      website: formattedCell(formatted, columns.website),
+      price: String(spend),
+      currency: 'EUR',
+      invoice_date: invoiceDate,
+      invoice_url: formattedCell(formatted, columns.invoice_url),
+      invoice_status: formattedCell(formatted, columns.invoice_status),
+      savings_eur: savings,
+      source_mode: 'report',
+      data_quality_issue: formattedCell(formatted, columns.data_quality_issue),
+      link_builder: formattedCell(formatted, columns.link_builder),
+      target_url: undefined,
+      anchor: undefined,
+      live_url: undefined,
+    });
+  }
+
+  return {
+    rows,
+    monthlySummary,
+    orderSummary,
+    sourceStatus: {
+      spreadsheet_id: config.spreadsheet_id,
+      order_code: config.spreadsheet_id,
+      status: 'success',
+      rows_pulled: rows.length,
+    },
+  };
+}
+
+function resolveRequiredColumns(
+  headerRow: readonly string[],
+  config: ReportSourceConfig,
+): Record<keyof ReportSourceConfig['headers'], number> {
+  const resolved = {} as Record<keyof ReportSourceConfig['headers'], number>;
+  const configuredNames = new Set<string>();
+
+  for (const [field, headerName] of Object.entries(config.headers) as Array<
+    [keyof ReportSourceConfig['headers'], string]
+  >) {
+    if (configuredNames.has(headerName)) {
+      throw new ReportSourceError(`required header ${headerName} is configured more than once`);
+    }
+    configuredNames.add(headerName);
+    const matches: number[] = [];
+    for (let i = 0; i < headerRow.length; i += 1) {
+      if (headerRow[i] === headerName) matches.push(i);
+    }
+    if (matches.length !== 1) {
+      const reason = matches.length === 0 ? 'missing' : 'duplicate';
+      throw new ReportSourceError(`${reason} required header ${headerName}`);
+    }
+    resolved[field] = matches[0]!;
+  }
+  return resolved;
+}
+
+function validatePairAlignment(formatted: RawRow[], unformatted: RawRow[], tab: string): void {
+  if (formatted.length !== unformatted.length) {
+    throw new ReportSourceError(
+      `formatted/unformatted row count mismatch for ${tab}: ${formatted.length} vs ${unformatted.length}`,
+    );
+  }
+  for (let i = 0; i < formatted.length; i += 1) {
+    if (formatted[i]!.row_index !== unformatted[i]!.row_index) {
+      throw new ReportSourceError(
+        `formatted/unformatted row alignment mismatch for ${tab} at index ${i}`,
+      );
+    }
+  }
+}
+
+function formattedCell(row: RawRow, column: number): string {
+  return row.cells[column] ?? '';
+}
+
+function unformattedCell(row: RawRow, column: number): string {
+  return row.cells[column] ?? '';
+}
+
+function parseRawMoney(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseSourceRow(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function isReportingYear(invoiceDate: string, year: number): boolean {
+  return invoiceDate >= `${year}-01-01` && invoiceDate < `${year + 1}-01-01`;
+}
+
+function parseReportingMonth(value: string): string | null {
+  const trimmed = value.trim();
+  const numeric = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(trimmed);
+  if (numeric) return `${numeric[1]}-${numeric[2]}`;
+
+  const numericWithDay = /^(\d{4})-(0[1-9]|1[0-2])-\d{1,2}$/.exec(trimmed);
+  if (numericWithDay) return `${numericWithDay[1]}-${numericWithDay[2]}`;
+
+  const named = /^(January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+(\d{4}))?$/i.exec(trimmed);
+  if (!named) return null;
+  const month = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+  ].indexOf(named[1]!.toLowerCase()) + 1;
+  const year = named[2] ?? '2026';
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function rowError(row: RawRow, message: string): ReportSourceError {
+  return new ReportSourceError(`Clean Data row ${row.row_index}: ${message}`);
+}

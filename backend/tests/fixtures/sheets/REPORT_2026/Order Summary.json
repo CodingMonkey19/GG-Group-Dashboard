@@ -1,0 +1,14 @@
+{
+  "rows": [
+    ["Order", "Spend (EUR)", "Savings (EUR)"],
+    ["ORDER-A", "€300.00", "€30.01"],
+    ["ORDER-B", "€50.25", "€5.13"],
+    ["Total", "€350.25", "€35.13"]
+  ],
+  "unformatted_rows": [
+    ["Order", "Spend (EUR)", "Savings (EUR)"],
+    ["ORDER-A", 300, 30.005],
+    ["ORDER-B", 50.25, 5.125],
+    ["Total", 350.25, 35.13]
+  ]
+}

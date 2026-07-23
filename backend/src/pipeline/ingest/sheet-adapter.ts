@@ -41,6 +41,12 @@ export interface AdapterRow {
   invoice_date: string | undefined;
   invoice_url: string | undefined;
   invoice_status: string | undefined;
+  /** Raw EUR savings. Legacy sheets have no savings column and use zero. */
+  savings_eur: number;
+  /** Distinguishes legacy tab adapters from the executive report reader. */
+  source_mode: 'report' | 'legacy';
+  /** Optional executive-report issue text, retained for later audit mapping. */
+  data_quality_issue?: string | undefined;
   // Pass-through provenance fields (optional).
   link_builder: string | undefined;
   target_url: string | undefined;
@@ -96,6 +102,8 @@ export function adaptSheet(
         invoice_date: cell(m.invoice_date ?? null),
         invoice_url: cell(m.invoice_url ?? null),
         invoice_status: cell(m.invoice_status ?? null),
+        savings_eur: 0,
+        source_mode: 'legacy',
         link_builder: cell(m.link_builder ?? null),
         target_url: cell(m.target_url ?? null),
         anchor: cell(m.anchor ?? null),

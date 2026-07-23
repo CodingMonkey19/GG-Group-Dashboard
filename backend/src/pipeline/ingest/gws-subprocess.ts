@@ -33,6 +33,7 @@ import {
   type DriveFileMetadata,
   type FolderSpreadsheet,
   type GwsWrapper,
+  type PullSheetOptions,
   type RawRow,
 } from './gws.js';
 
@@ -261,8 +262,13 @@ export class GwsSubprocess implements GwsWrapper {
     return this.pullSheetInternal(spreadsheetId, tab);
   }
 
-  async pullSheetRange(spreadsheetId: string, tab: string, a1Range: string): Promise<RawRow[]> {
-    return this.pullSheetInternal(spreadsheetId, tab, a1Range);
+  async pullSheetRange(
+    spreadsheetId: string,
+    tab: string,
+    a1Range: string,
+    options?: PullSheetOptions,
+  ): Promise<RawRow[]> {
+    return this.pullSheetInternal(spreadsheetId, tab, a1Range, options);
   }
 
   async pullSheetHeaders(spreadsheetId: string, tabs: string[]): Promise<Map<string, RawRow[]>> {
@@ -298,15 +304,15 @@ export class GwsSubprocess implements GwsWrapper {
     spreadsheetId: string,
     tab: string,
     a1Range?: string,
+    options: PullSheetOptions = {},
   ): Promise<RawRow[]> {
     const range = formatSheetRange(tab, a1Range);
     const params = JSON.stringify({
       spreadsheetId,
       range,
-      // Use FORMATTED_VALUE so number/date cells come through as the
-      // strings the operator sees in Sheets (e.g., "€100.50", "2026-04-15").
-      // The normalize layer parses those formats.
-      valueRenderOption: 'FORMATTED_VALUE',
+      // Defaults to operator-facing strings. Report ingestion explicitly
+      // requests UNFORMATTED_VALUE for money cells to retain source precision.
+      valueRenderOption: options.valueRenderOption ?? 'FORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
     const stdout = await runGws(
