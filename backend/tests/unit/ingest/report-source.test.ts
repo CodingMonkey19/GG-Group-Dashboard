@@ -61,6 +61,11 @@ function reportFixture(
   return { gws: new FixtureGws({ fixturesRoot: root }), clean };
 }
 
+function setPairedCell(clean: FixtureFile, row: number, column: number, value: unknown): void {
+  clean.rows[row]![column] = value;
+  clean.unformatted_rows![row]![column] = value;
+}
+
 describe('readReportSource', () => {
   it('keeps legacy adapter rows explicit about zero savings', () => {
     const sheet: SheetEntry = {
@@ -89,7 +94,13 @@ describe('readReportSource', () => {
 
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
     expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
+    expect(batch.rows[0]?.invoice_date).toBe('2026-01-15');
     expect(batch.rows[0]?.savings_eur).toBe(10.005);
+    expect(batch.rows[2]).toMatchObject({
+      order_code: 'ORDER-B',
+      tab_name: 'January 2026',
+      row_index: 5,
+    });
     expect(batch.rows[0]).toMatchObject({
       status: 'Done',
       currency: 'EUR',
@@ -106,12 +117,18 @@ describe('readReportSource', () => {
     ));
     expect(batch.monthlySummary[1]?.cells).toEqual(['January 2026', '100', '10.005']);
     expect(batch.orderSummary[1]?.cells).toEqual(['ORDER-A', '300', '30.005']);
-    expect(batch.sourceStatus).toMatchObject({ status: 'success', rows_pulled: 3 });
+    expect(batch.sourceStatus).toEqual({
+      spreadsheet_id: 'REPORT_2026',
+      order_code: '2026 Spending Report',
+      status: 'success',
+      rows_pulled: 3,
+    });
     expect(calls).toEqual([
       { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
       { tab: 'Clean Data', option: 'UNFORMATTED_VALUE' },
       { tab: 'Monthly Spending', option: 'UNFORMATTED_VALUE' },
       { tab: 'Order Summary', option: 'UNFORMATTED_VALUE' },
+      { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
     ]);
   });
 
@@ -136,6 +153,19 @@ describe('readReportSource', () => {
     await expect(readReportSource(REPORT_CONFIG, gws)).rejects.toThrow('formatted/unformatted row count mismatch');
   });
 
+  it('fails closed when a same-count paired read has a different source identity', async () => {
+    const { gws } = reportFixture();
+    const original = gws.pullSheetRange.bind(gws);
+    gws.pullSheetRange = async (id, tab, range, options) => {
+      const rows = await original(id, tab, range, options);
+      if (tab === 'Clean Data' && options?.valueRenderOption === 'UNFORMATTED_VALUE') {
+        rows[3]!.cells[0] = 'CROSS-WIRED-ORDER';
+      }
+      return rows;
+    };
+    await expect(readReportSource(REPORT_CONFIG, gws)).rejects.toThrow('formatted/unformatted identity mismatch');
+  });
+
   it('fails for an included undated row, invalid 2026 money, and a month mismatch', async () => {
     const undated = reportFixture((clean) => { clean.rows[7]![10] = 'TRUE'; });
     await expect(readReportSource(REPORT_CONFIG, undated.gws)).rejects.toThrow('invalid or missing Invoice Date');
@@ -151,31 +181,58 @@ describe('readReportSource', () => {
   });
 
   it('fails for a blank order, invalid source row, or duplicate source identity', async () => {
-    const blankOrder = reportFixture((clean) => { clean.rows[3]![0] = ''; });
+    const blankOrder = reportFixture((clean) => { setPairedCell(clean, 3, 0, ''); });
     await expect(readReportSource(REPORT_CONFIG, blankOrder.gws)).rejects.toThrow('blank Order');
 
-    const invalidSourceRow = reportFixture((clean) => { clean.rows[3]![2] = '5.5'; });
+    const invalidSourceRow = reportFixture((clean) => { setPairedCell(clean, 3, 2, '5.5'); });
     await expect(readReportSource(REPORT_CONFIG, invalidSourceRow.gws)).rejects.toThrow('invalid Source Row');
 
     const duplicateIdentity = reportFixture((clean) => {
-      clean.rows[4]![1] = 'January 2026';
-      clean.rows[4]![2] = '5';
+      setPairedCell(clean, 4, 1, 'January 2026');
+      setPairedCell(clean, 4, 2, '5');
     });
     await expect(readReportSource(REPORT_CONFIG, duplicateIdentity.gws)).rejects.toThrow('duplicate source identity');
   });
 
-  it('enforces the 5,000 data-row cap before parsing report data', async () => {
-    const { gws, clean } = reportFixture((fixture) => {
+  it('detects the 5,001st data row through the bounded overflow sentinel', async () => {
+    const { gws } = reportFixture((fixture) => {
       const data = fixture.rows[3]!;
       while (fixture.rows.length <= 5_001) fixture.rows.push([...data]);
       while (fixture.unformatted_rows!.length <= 5_001) fixture.unformatted_rows!.push([...fixture.unformatted_rows![3]!]);
     });
-    const formattedRows = clean.rows.map((cells, idx) => ({ row_index: idx + 1, cells: cells.map(String) }));
-    gws.pullSheetRange = async (_id, tab) => {
-      if (tab === 'Clean Data') return formattedRows;
-      return [];
-    };
     await expect(readReportSource(REPORT_CONFIG, gws)).rejects.toThrow('exceeds 5000 data rows');
+  });
+
+  it('uses per-order/source date conventions and rejects mixed ambiguous evidence', async () => {
+    const us = reportFixture((clean) => {
+      setPairedCell(clean, 3, 1, 'Shared Source');
+      setPairedCell(clean, 3, 3, '2/27/2026');
+      setPairedCell(clean, 3, 4, 'February 2026');
+      setPairedCell(clean, 4, 1, 'Shared Source');
+      setPairedCell(clean, 4, 2, '6');
+      setPairedCell(clean, 4, 3, '2/6/2026');
+      setPairedCell(clean, 4, 4, 'February 2026');
+      setPairedCell(clean, 5, 10, 'FALSE');
+    });
+    const usBatch = await readReportSource(REPORT_CONFIG, us.gws);
+    expect(usBatch.rows.map((row) => row.invoice_date)).toEqual(['2026-02-27', '2026-02-06']);
+
+    const mixed = reportFixture((clean) => {
+      setPairedCell(clean, 3, 1, 'Shared Source');
+      setPairedCell(clean, 3, 2, '5');
+      setPairedCell(clean, 3, 3, '27/2/2026');
+      setPairedCell(clean, 3, 4, 'February 2026');
+      setPairedCell(clean, 4, 1, 'Shared Source');
+      setPairedCell(clean, 4, 2, '6');
+      setPairedCell(clean, 4, 3, '2/27/2026');
+      setPairedCell(clean, 4, 4, 'February 2026');
+      setPairedCell(clean, 5, 0, 'ORDER-A');
+      setPairedCell(clean, 5, 1, 'Shared Source');
+      setPairedCell(clean, 5, 2, '7');
+      setPairedCell(clean, 5, 3, '2/3/2026');
+      setPairedCell(clean, 5, 4, 'March 2026');
+    });
+    await expect(readReportSource(REPORT_CONFIG, mixed.gws)).rejects.toThrow('invalid or missing Invoice Date');
   });
 
   it('throws the explicit reader error when efficient range reads are unavailable', async () => {

@@ -9,12 +9,17 @@
 
 import type { ReportSourceConfig } from '../../shared/contracts.js';
 import type { PerSourceStatus } from '../../shared/contracts.js';
-import { parseDateCell } from '../normalize/date-resolution.js';
+import {
+  detectNumericDateOrder,
+  parseDateCell,
+  type NumericDateOrder,
+} from '../normalize/date-resolution.js';
 import { sourceRowKey } from '../normalize/source-row-key.js';
 import type { AdapterRow } from './sheet-adapter.js';
 import type { GwsWrapper, RawRow } from './gws.js';
 
 const REPORT_RANGE = 'A1:Z5001';
+const OVERFLOW_SENTINEL_RANGE = 'A5002:Z5002';
 const MAX_DATA_ROWS = 5_000;
 
 export interface ReportSourceBatch {
@@ -40,7 +45,7 @@ export async function readReportSource(
     throw new ReportSourceError('report source requires GwsWrapper.pullSheetRange');
   }
 
-  const [formattedRows, unformattedRows, monthlySummary, orderSummary] = await Promise.all([
+  const [formattedRows, unformattedRows, monthlySummary, orderSummary, overflowRows] = await Promise.all([
     gws.pullSheetRange(config.spreadsheet_id, config.data_tab, REPORT_RANGE, {
       valueRenderOption: 'FORMATTED_VALUE',
     }),
@@ -53,6 +58,9 @@ export async function readReportSource(
     gws.pullSheetRange(config.spreadsheet_id, config.order_summary_tab, REPORT_RANGE, {
       valueRenderOption: 'UNFORMATTED_VALUE',
     }),
+    gws.pullSheetRange(config.spreadsheet_id, config.data_tab, OVERFLOW_SENTINEL_RANGE, {
+      valueRenderOption: 'FORMATTED_VALUE',
+    }),
   ]);
 
   validatePairAlignment(formattedRows, unformattedRows, config.data_tab);
@@ -64,8 +72,14 @@ export async function readReportSource(
   }
 
   const columns = resolveRequiredColumns(formattedRows[0]!.cells, config);
+  validatePairIdentities(formattedRows, unformattedRows, columns);
+  if (overflowRows.some(hasNonBlankCell)) {
+    throw new ReportSourceError(`report data tab exceeds ${MAX_DATA_ROWS} data rows`);
+  }
+
   const rows: AdapterRow[] = [];
   const seenSourceIdentities = new Set<string>();
+  const numericDateOrders = inferNumericDateOrders(formattedRows, columns);
 
   for (let index = 1; index < formattedRows.length; index += 1) {
     const formatted = formattedRows[index]!;
@@ -73,7 +87,10 @@ export async function readReportSource(
     const included = formattedCell(formatted, columns.included);
     if (included !== 'TRUE') continue;
 
-    const invoiceDate = parseDateCell(formattedCell(formatted, columns.invoice_date));
+    const invoiceDate = parseDateCell(
+      formattedCell(formatted, columns.invoice_date),
+      numericDateOrders.get(sourceGroupKey(formatted, columns)) ?? 'ambiguous',
+    );
     if (invoiceDate === null) {
       throw rowError(formatted, 'included row has an invalid or missing Invoice Date');
     }
@@ -87,7 +104,7 @@ export async function readReportSource(
     const sourceRow = parseSourceRow(formattedCell(formatted, columns.source_row));
     if (sourceRow === null) throw rowError(formatted, 'included 2026 row has an invalid Source Row');
 
-    const sourceIdentity = `${sourceTab}\u001f${sourceRow}`;
+    const sourceIdentity = `${orderCode}\u001f${sourceTab}\u001f${sourceRow}`;
     if (seenSourceIdentities.has(sourceIdentity)) {
       throw rowError(formatted, `duplicate source identity ${sourceTab}/${sourceRow}`);
     }
@@ -140,7 +157,7 @@ export async function readReportSource(
     orderSummary,
     sourceStatus: {
       spreadsheet_id: config.spreadsheet_id,
-      order_code: config.spreadsheet_id,
+      order_code: '2026 Spending Report',
       status: 'success',
       rows_pulled: rows.length,
     },
@@ -187,6 +204,68 @@ function validatePairAlignment(formatted: RawRow[], unformatted: RawRow[], tab: 
       );
     }
   }
+}
+
+function validatePairIdentities(
+  formatted: RawRow[],
+  unformatted: RawRow[],
+  columns: Record<keyof ReportSourceConfig['headers'], number>,
+): void {
+  for (let i = 1; i < formatted.length; i += 1) {
+    const formattedRow = formatted[i]!;
+    const unformattedRow = unformatted[i]!;
+    const formattedIdentity = pairedIdentity(formattedRow, columns);
+    const unformattedIdentity = pairedIdentity(unformattedRow, columns);
+    if (formattedIdentity !== unformattedIdentity) {
+      throw new ReportSourceError(
+        `formatted/unformatted identity mismatch for Clean Data row ${formattedRow.row_index}`,
+      );
+    }
+  }
+}
+
+function pairedIdentity(
+  row: RawRow,
+  columns: Record<keyof ReportSourceConfig['headers'], number>,
+): string {
+  return [
+    formattedCell(row, columns.order).trim(),
+    formattedCell(row, columns.source_tab).trim(),
+    normalizeIdentitySourceRow(formattedCell(row, columns.source_row)),
+    formattedCell(row, columns.invoice_url).trim(),
+  ].join('\u001f');
+}
+
+function normalizeIdentitySourceRow(value: string): string {
+  const numeric = Number(value.trim());
+  return Number.isSafeInteger(numeric) && numeric > 0 ? String(numeric) : value.trim();
+}
+
+function inferNumericDateOrders(
+  rows: RawRow[],
+  columns: Record<keyof ReportSourceConfig['headers'], number>,
+): Map<string, NumericDateOrder> {
+  const datesBySource = new Map<string, string[]>();
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i]!;
+    if (formattedCell(row, columns.included) !== 'TRUE') continue;
+    const key = sourceGroupKey(row, columns);
+    const dates = datesBySource.get(key) ?? [];
+    dates.push(formattedCell(row, columns.invoice_date));
+    datesBySource.set(key, dates);
+  }
+  return new Map([...datesBySource].map(([key, dates]) => [key, detectNumericDateOrder(dates)]));
+}
+
+function sourceGroupKey(
+  row: RawRow,
+  columns: Record<keyof ReportSourceConfig['headers'], number>,
+): string {
+  return `${formattedCell(row, columns.order).trim()}\u001f${formattedCell(row, columns.source_tab).trim()}`;
+}
+
+function hasNonBlankCell(row: RawRow): boolean {
+  return row.cells.some((cell) => cell.trim().length > 0);
 }
 
 function formattedCell(row: RawRow, column: number): string {
