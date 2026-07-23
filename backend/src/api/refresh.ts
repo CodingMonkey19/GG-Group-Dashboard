@@ -74,7 +74,11 @@ export function registerRefreshRoute(app: FastifyInstance): void {
       }
     });
 
+    let activeRefreshId = 0;
     const writeEvent = (event: RefreshSseEvent): void => {
+      if (event.event === 'started') {
+        activeRefreshId = event.data.refresh_id;
+      }
       if (clientGone) return; // skip writes to a dead socket
       try {
         reply.raw.write(`event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`);
@@ -116,8 +120,9 @@ export function registerRefreshRoute(app: FastifyInstance): void {
         data: {
           // refresh_id may legitimately be 0 here when the pipeline threw
           // before allocateRefreshEvent could run (e.g., ECB seeder + DB
-          // open failures). The contract permits nonnegative integers.
-          refresh_id: 0,
+          // open failures). Once `started` is emitted, preserve its ID for
+          // every terminal event in that refresh.
+          refresh_id: activeRefreshId,
           error: sanitizeErrorMessage(raw),
         },
       });

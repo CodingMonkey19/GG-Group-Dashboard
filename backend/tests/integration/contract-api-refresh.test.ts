@@ -177,4 +177,63 @@ describe('POST /api/refresh SSE contract (T041 — strict)', () => {
       await app.close();
     }
   });
+
+  it('uses the started refresh ID when report_source fails after allocation', async () => {
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schema_version: 1,
+        report_source: {
+          spreadsheet_id: 'REPORT_2026',
+          data_tab: 'Clean Data',
+          monthly_summary_tab: 'Monthly Spending',
+          order_summary_tab: 'Order Summary',
+          reporting_year: 2026,
+          headers: {
+            order: 'Order',
+            source_tab: 'Source Tab',
+            source_row: 'Source Row',
+            invoice_date: 'Invoice Date',
+            reporting_month: 'Month',
+            link_builder: 'Link Builder',
+            website: 'Website',
+            spend_eur: 'Price (EUR)',
+            invoice_url: 'Invoice',
+            invoice_status: 'Invoice Status',
+            included: 'Included in Reporting Period',
+            data_quality_issue: 'Data Quality Issue',
+            savings_eur: 'Saving (EUR)',
+          },
+        },
+      }),
+    );
+    const app = await buildServer({
+      dataDir,
+      sheetsConfigPath: configPath,
+      gwsFactory: () => new FixtureGws({ fixturesRoot: FIXTURES_ROOT }),
+      ecbSeeder: async () => {
+        // no-op
+      },
+    });
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/refresh',
+        headers: { Accept: 'text/event-stream' },
+      });
+      const events = parseSseStream(res.body);
+      const started = events.find((event) => event.event === 'started');
+      const error = events.find((event) => event.event === 'error');
+
+      expect(started).toBeDefined();
+      expect(error).toBeDefined();
+      expect(started?.data.refresh_id).toBeTypeOf('number');
+      expect(started?.data.refresh_id).toBeGreaterThan(0);
+      expect(error?.data.refresh_id).toBe(started?.data.refresh_id);
+      expect(events.some((event) => event.event === 'completed')).toBe(false);
+    } finally {
+      await app.close();
+    }
+  });
 });
