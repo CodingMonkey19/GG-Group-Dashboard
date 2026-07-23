@@ -53,6 +53,7 @@ function row(partial: Partial<NormalizedRow>): NormalizedRow {
     native_amount: 100,
     native_currency: 'EUR',
     eur_amount: 100,
+    savings_eur: 0,
     ecb_rate: 1,
     ecb_rate_as_of: '2026-04-01',
     conversion_status: 'converted',

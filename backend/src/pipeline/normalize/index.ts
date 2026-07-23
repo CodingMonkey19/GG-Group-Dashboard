@@ -33,7 +33,7 @@ import type { GwsWrapper } from '../ingest/gws.js';
 import type { AdapterRow } from '../ingest/sheet-adapter.js';
 import { parsePriceCell, priceReasonToConversionStatus } from './conversion-status.js';
 import { toEur, EcbRateUnavailableError } from './currency.js';
-import { resolveDate } from './date-resolution.js';
+import { parseDateCell, resolveDate } from './date-resolution.js';
 import { classifyInvoiceType } from './invoice-type.js';
 import { classifyPaymentStatus } from './payment-status.js';
 import { isDone } from './status-filter.js';
@@ -62,6 +62,8 @@ export interface NormalizedRow {
   native_amount: number | null;
   native_currency: string | null;
   eur_amount: number | null;
+  /** Raw EUR savings supplied by the executive report; legacy rows use zero. */
+  savings_eur: number;
   ecb_rate: number | null;
   ecb_rate_as_of: string | null;
   conversion_status: ConversionStatus;
@@ -76,6 +78,18 @@ export interface NormalizeOptions {
   db: DatabaseT;
   /** Local PDF root for extract/pdf.ts. Required when any sheet has `pdf` rows. */
   pdfRoot: string;
+}
+
+/**
+ * Global dashboard boundary. Every ingestion mode must apply this before a
+ * row can reach normalization, counters, audits, or storage.
+ */
+export function isDashboardEligibleRow(
+  row: Pick<AdapterRow, 'status' | 'invoice_date'>,
+): boolean {
+  const invoiceDate = parseDateCell(row.invoice_date);
+  return isDone(row.status) && invoiceDate !== null &&
+    invoiceDate >= '2026-01-01' && invoiceDate < '2027-01-01';
 }
 
 /**
@@ -99,6 +113,7 @@ export async function normalizeRow(
   const website = canonicalizeWebsite(row.website);
 
   const audit_flags: string[] = [];
+  const isReportRow = row.source_mode === 'report';
 
   // ---- Extract step (per invoice_type). Owns artifact_status. ----
   let artifact_status: ArtifactStatus = 'not_attempted';
@@ -106,7 +121,10 @@ export async function normalizeRow(
   let artifact_invoice_id: string | null = null;
   let artifact_date: string | null = null;
 
-  if (invoice_type === 'paypal' && artifact_ref !== null) {
+  // Clean Data's validated invoice date is authoritative for report rows.
+  // Still classify and retain the artifact reference for the artifact route,
+  // but never inspect PDF/Drive metadata during a report refresh.
+  if (!isReportRow && invoice_type === 'paypal' && artifact_ref !== null) {
     const r = extractPaypal(artifact_ref);
     artifact_invoice_id = r.invoice_id;
     artifact_status = r.artifact_status; // always 'not_attempted' in v1
@@ -126,11 +144,20 @@ export async function normalizeRow(
   // intuit / text / missing → artifact_status stays 'not_attempted'.
 
   // ---- Date-resolution chain (sheet → artifact → undated). ----
-  const dateResolution = resolveDate({
-    sheetCell: row.invoice_date,
-    artifactDate: artifact_date,
-    invoice_type,
-  });
+  const reportDate = isReportRow ? parseDateCell(row.invoice_date) : null;
+  const dateResolution = isReportRow
+    ? reportDate === null
+      ? { invoice_date: null, invoice_month: null, date_source: 'undated' as const }
+      : {
+          invoice_date: reportDate,
+          invoice_month: reportDate.slice(0, 7),
+          date_source: 'sheet' as const,
+        }
+    : resolveDate({
+        sheetCell: row.invoice_date,
+        artifactDate: artifact_date,
+        invoice_type,
+      });
 
   // ---- Conversion (price + currency → EUR). ----
   const priceParse = parsePriceCell(row.price);
@@ -210,6 +237,10 @@ export async function normalizeRow(
   if (!done) audit_flags.push('non_done_row');
   if (payment_status === 'unknown') audit_flags.push('unknown_payment_status');
   if (payment_status === 'missing') audit_flags.push('missing_payment_status');
+  const sourceIssue = row.data_quality_issue?.trim();
+  if (isReportRow && sourceIssue !== undefined && sourceIssue.length > 0) {
+    audit_flags.push(`source_data_quality_issue:${sourceIssue}`);
+  }
   // QA review H10: gate future_dated_invoice on is_done to match the audit
   // emitter (audit/findings.ts), otherwise the row's audit_flags JSON and
   // the canonical audit_findings table disagree.
@@ -251,6 +282,7 @@ export async function normalizeRow(
     native_amount,
     native_currency,
     eur_amount,
+    savings_eur: isReportRow ? row.savings_eur : 0,
     ecb_rate,
     ecb_rate_as_of,
     conversion_status,

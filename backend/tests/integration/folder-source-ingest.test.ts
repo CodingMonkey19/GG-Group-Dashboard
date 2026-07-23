@@ -55,10 +55,10 @@ describe('runConsolidation — dynamic folder source + hard row eligibility', ()
       writeSheet(fixturesRoot, 'COPY_AG', {
         'April 2026': [
           HEADER,
-          ['Done', 'Saras', 'valid.com', '', '', '', '100', '', '', '', '', 'https://live', '1/6/2025', 'https://www.paypal.com/invoice/p/#VALID', 'paid'],
-          ['done', 'Saras', 'lowercase.com', '', '', '', '200', '', '', '', '', 'https://live', '1/6/2025', 'https://www.paypal.com/invoice/p/#LOWER', 'paid'],
+          ['Done', 'Saras', 'valid.com', '', '', '', '100', '', '', '', '', 'https://live', '1/6/2026', 'https://www.paypal.com/invoice/p/#VALID', 'paid'],
+          ['done', 'Saras', 'lowercase.com', '', '', '', '200', '', '', '', '', 'https://live', '1/6/2026', 'https://www.paypal.com/invoice/p/#LOWER', 'paid'],
           ['Done', 'Saras', 'missing-date.com', '', '', '', '300', '', '', '', '', 'https://live', '', 'https://www.paypal.com/invoice/p/#NODATE', 'paid'],
-          ['In Progress', 'Saras', 'wip.com', '', '', '', '400', '', '', '', '', 'https://live', '1/6/2025', 'https://www.paypal.com/invoice/p/#WIP', 'paid'],
+          ['In Progress', 'Saras', 'wip.com', '', '', '', '400', '', '', '', '', 'https://live', '1/6/2026', 'https://www.paypal.com/invoice/p/#WIP', 'paid'],
         ],
         Blocklist: [
           ['Status', 'Website', 'Price'],
@@ -68,7 +68,7 @@ describe('runConsolidation — dynamic folder source + hard row eligibility', ()
       writeSheet(fixturesRoot, 'COPY_CENTRAL_LT', {
         'April 2026': [
           HEADER,
-          ['Done', 'Saras', 'excluded.com', '', '', '', '999', '', '', '', '', 'https://live', '1/6/2025', 'https://www.paypal.com/invoice/p/#EXCLUDED', 'paid'],
+          ['Done', 'Saras', 'excluded.com', '', '', '', '999', '', '', '', '', 'https://live', '1/6/2026', 'https://www.paypal.com/invoice/p/#EXCLUDED', 'paid'],
         ],
       });
 
@@ -122,7 +122,7 @@ describe('runConsolidation — dynamic folder source + hard row eligibility', ()
           spreadsheet_id: 'COPY_AG',
           tab_name_raw: 'April 2026',
           website: 'valid.com',
-          invoice_date: '2025-06-01',
+          invoice_date: '2026-06-01',
         },
       ]);
 

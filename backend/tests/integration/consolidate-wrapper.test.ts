@@ -422,7 +422,7 @@ describe('consolidate() — all-source-failed must not wipe prior snapshot (Code
   });
 });
 
-describe('consolidate() — unsupported or empty source modes fail closed', () => {
+describe('consolidate() — report and empty source modes', () => {
   let env: TestEnv;
 
   beforeEach(async () => {
@@ -444,11 +444,10 @@ describe('consolidate() — unsupported or empty source modes fail closed', () =
 
   afterEach(() => teardown(env));
 
-  it('preserves the prior snapshot while report_source has no wired reader', async () => {
-    const goodBytesBefore = readFileSync(env.livePath);
+  it('uses the wired report reader rather than the temporary unsupported-source guard', async () => {
     writeFileSync(env.configPath, makeReportSourceConfig());
 
-    await expect(consolidate({
+    const result = await consolidate({
       configPath: env.configPath,
       dataDir: env.dataDir,
       pdfRoot: '/tmp/never-used',
@@ -456,9 +455,15 @@ describe('consolidate() — unsupported or empty source modes fail closed', () =
       ecbSeeder: async () => {
         // no-op
       },
-    })).rejects.toThrow('report_source ingestion is not available');
+    });
 
-    expect(readFileSync(env.livePath).equals(goodBytesBefore)).toBe(true);
+    expect(result.status).toBe('success');
+    expect(result.per_source[0]).toMatchObject({
+      spreadsheet_id: 'REPORT_2026',
+      order_code: '2026 Spending Report',
+      rows_pulled: 3,
+    });
+    expect(existsSync(env.livePath)).toBe(true);
     expect(existsSync(env.stagingPath)).toBe(false);
   });
 

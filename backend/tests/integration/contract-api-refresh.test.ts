@@ -210,7 +210,10 @@ describe('POST /api/refresh SSE contract (T041 — strict)', () => {
     const app = await buildServer({
       dataDir,
       sheetsConfigPath: configPath,
-      gwsFactory: () => new FixtureGws({ fixturesRoot: FIXTURES_ROOT }),
+      gwsFactory: () => new FixtureGws({
+        fixturesRoot: FIXTURES_ROOT,
+        failures: { authErrors: new Set(['REPORT_2026']) },
+      }),
       ecbSeeder: async () => {
         // no-op
       },

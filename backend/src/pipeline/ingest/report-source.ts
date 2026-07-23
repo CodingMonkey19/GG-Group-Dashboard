@@ -14,6 +14,7 @@ import {
   parseDateCell,
   type NumericDateOrder,
 } from '../normalize/date-resolution.js';
+import { isDashboardEligibleRow } from '../normalize/index.js';
 import { sourceRowKey } from '../normalize/source-row-key.js';
 import type { AdapterRow } from './sheet-adapter.js';
 import type { GwsWrapper, RawRow } from './gws.js';
@@ -94,7 +95,7 @@ export async function readReportSource(
     if (invoiceDate === null) {
       throw rowError(formatted, 'included row has an invalid or missing Invoice Date');
     }
-    if (!isReportingYear(invoiceDate, config.reporting_year)) continue;
+    if (!isDashboardEligibleRow({ status: 'Done', invoice_date: invoiceDate })) continue;
 
     const orderCode = formattedCell(formatted, columns.order).trim();
     if (orderCode.length === 0) throw rowError(formatted, 'included 2026 row has a blank Order');
@@ -288,10 +289,6 @@ function parseSourceRow(value: string): number | null {
   if (!/^[1-9]\d*$/.test(trimmed)) return null;
   const parsed = Number(trimmed);
   return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
-function isReportingYear(invoiceDate: string, year: number): boolean {
-  return invoiceDate >= `${year}-01-01` && invoiceDate < `${year + 1}-01-01`;
 }
 
 function parseReportingMonth(value: string): string | null {
