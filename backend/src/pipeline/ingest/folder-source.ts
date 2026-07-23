@@ -37,6 +37,12 @@ export async function prepareIngestSources(
   config: SheetsConfig,
   gws: GwsWrapper,
 ): Promise<PreparedSource[]> {
+  if (config.report_source !== undefined) {
+    throw new Error(
+      'report_source ingestion is not available until the report reader is wired; refusing refresh',
+    );
+  }
+
   if (config.folder_source === undefined) {
     return config.sheets.map((sheet) => ({
       sheet,

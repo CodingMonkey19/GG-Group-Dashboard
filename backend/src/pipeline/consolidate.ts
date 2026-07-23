@@ -107,6 +107,9 @@ export async function runConsolidation(
     rows: ReturnType<typeof adaptSheet>;
   }> = [];
   const preparedSources = await prepareIngestSources(opts.config, opts.gws);
+  if (preparedSources.length === 0) {
+    throw new Error('ingest prepared zero sources; refusing to publish an empty snapshot');
+  }
 
   for (const source of preparedSources) {
     const sheet = source.sheet;
