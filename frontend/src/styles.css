@@ -360,6 +360,8 @@ button, select, input { font-family: inherit; color: inherit; }
 .legend__dot { width: 10px; height: 10px; border-radius: 2px; }
 .legend__dot--paid { background: var(--paid-2); }
 .legend__dot--out  { background: var(--unpaid); }
+.legend__dot--current { background: var(--accent-2); }
+.legend__dot--comparison { background: var(--ink-4); }
 
 /* ---------- Charts ---------- */
 .chart { width: 100%; height: auto; display: block; }
@@ -367,11 +369,21 @@ button, select, input { font-family: inherit; color: inherit; }
 .chart__line { fill: none; stroke: var(--accent-2); stroke-width: 2.2; stroke-linejoin: round; }
 .chart__area { fill: rgba(44,99,214,0.10); stroke: none; }
 .chart__dot  { fill: var(--accent-2); stroke: var(--surface); stroke-width: 1.5; transition: r 0.15s ease; }
+.chart__dot--current { fill: var(--accent-2); stroke: var(--accent); stroke-width: 2.5; }
+.chart__dot--comparison { fill: var(--surface); stroke: var(--ink-4); stroke-width: 3; }
+.chart__period-band { pointer-events: none; }
+.chart__period-band--current { fill: rgba(44,99,214,0.08); }
+.chart__period-band--comparison { fill: rgba(107,116,132,0.08); }
+.chart__period-line { pointer-events: none; stroke-width: 1.5; }
+.chart__period-line--current { stroke: var(--accent-2); }
+.chart__period-line--comparison { stroke: var(--ink-4); stroke-dasharray: 5 4; }
 .chart__bar--paid { fill: var(--paid-2); }
 .chart__bar--out  { fill: var(--unpaid); }
 .chart__bar--total { fill: var(--accent-2); transition: fill 0.15s ease; }
 .chart__bar-value { font: 600 11px var(--mono); fill: var(--ink-3); }
 .chart__axis-label { font: 500 11px var(--font); fill: var(--ink-3); }
+.chart__axis-label--current { fill: var(--accent-2); font-weight: 700; }
+.chart__axis-label--comparison { fill: var(--ink-2); font-weight: 700; }
 .chart__hover-line { stroke: var(--ink-4); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart__tip-bg { fill: var(--ink); opacity: 0.94; }
 .chart__tip-label { font: 500 10px var(--mono); fill: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.06em; }
