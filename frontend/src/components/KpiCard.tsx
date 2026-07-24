@@ -1,13 +1,20 @@
 export type KpiAccent = 'paid' | 'unpaid';
-export type KpiDeltaDir = 'up' | 'down';
+export type KpiDeltaDir = 'up' | 'down' | 'flat';
+
+export interface KpiComparison {
+  label: string;
+  value: string;
+  delta: string;
+  direction: KpiDeltaDir;
+  tone: 'neutral' | 'favorable';
+}
 
 interface Props {
   label: string;
   value: string;
   sub: string;
   accent?: KpiAccent;
-  delta?: string;
-  deltaDir?: KpiDeltaDir;
+  comparison?: KpiComparison;
   /**
    * Hover tooltip text. When set, a small `ⓘ` is rendered next to the label
    * and the root `.kpi` div carries `title={tooltip}` for a native browser
@@ -22,8 +29,7 @@ export function KpiCard({
   value,
   sub,
   accent,
-  delta,
-  deltaDir = 'up',
+  comparison,
   tooltip,
   onClick,
 }: Props): JSX.Element {
@@ -39,14 +45,21 @@ export function KpiCard({
             </span>
           )}
         </span>
-        {delta && (
-          <span className={`kpi__delta kpi__delta--${deltaDir}`}>
-            <span className="kpi__delta-arrow">▲</span> {delta}
-          </span>
-        )}
       </div>
       <div className="kpi__value">{value}</div>
       <div className="kpi__sub">{sub}</div>
+      {comparison !== undefined && (
+        <div className="kpi__comparison">
+          <span className="kpi__comparison-copy">
+            {comparison.label} · <strong>{comparison.value}</strong>
+          </span>
+          <span
+            className={`kpi__delta kpi__delta--${comparison.tone} kpi__delta--${comparison.direction}`}
+          >
+            {comparison.delta}
+          </span>
+        </div>
+      )}
     </>
   );
 

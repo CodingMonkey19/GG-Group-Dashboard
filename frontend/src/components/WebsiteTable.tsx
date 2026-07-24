@@ -67,12 +67,45 @@ function safeExternalHref(displayUrl: string): string | null {
   return `https://${trimmed}`;
 }
 
+function optionalNumber(value: string): number | null {
+  if (value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
   const [sortCol, setSortCol] = useState<SortColumn>('live_url');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [urlFilter, setUrlFilter] = useState('');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [historyMin, setHistoryMin] = useState('');
+  const [historyMax, setHistoryMax] = useState('');
 
-  const sorted = useMemo(() => {
-    const out = rows.slice();
+  const filteredSorted = useMemo(() => {
+    const normalizedUrl = urlFilter.trim().toLowerCase();
+    const minPrice = optionalNumber(priceMin);
+    const maxPrice = optionalNumber(priceMax);
+    const minHistory = optionalNumber(historyMin);
+    const maxHistory = optionalNumber(historyMax);
+    const out = rows.filter((row) => {
+      const displayUrl = (row.current_price_live_url ?? row.website).toLowerCase();
+      if (normalizedUrl !== '' && !displayUrl.includes(normalizedUrl)) return false;
+
+      const price = row.current_price_eur;
+      if (minPrice !== null && (price === null || price < minPrice)) return false;
+      if (maxPrice !== null && (price === null || price > maxPrice)) return false;
+
+      const date = row.current_price_invoice_date;
+      if (dateFrom !== '' && (date === null || date < dateFrom)) return false;
+      if (dateTo !== '' && (date === null || date > dateTo)) return false;
+
+      if (minHistory !== null && row.history_count < minHistory) return false;
+      if (maxHistory !== null && row.history_count > maxHistory) return false;
+      return true;
+    });
     out.sort((a, b) => {
       let cmp = 0;
       switch (sortCol) {
@@ -110,7 +143,38 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return out;
-  }, [rows, sortCol, sortDir]);
+  }, [
+    rows,
+    sortCol,
+    sortDir,
+    urlFilter,
+    priceMin,
+    priceMax,
+    dateFrom,
+    dateTo,
+    historyMin,
+    historyMax,
+  ]);
+
+  const filtersActive = [
+    urlFilter,
+    priceMin,
+    priceMax,
+    dateFrom,
+    dateTo,
+    historyMin,
+    historyMax,
+  ].some((value) => value.trim() !== '');
+
+  const clearFilters = (): void => {
+    setUrlFilter('');
+    setPriceMin('');
+    setPriceMax('');
+    setDateFrom('');
+    setDateTo('');
+    setHistoryMin('');
+    setHistoryMax('');
+  };
 
   const onHeaderClick = (col: SortColumn): void => {
     if (col === sortCol) {
@@ -142,6 +206,12 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
 
   return (
     <section className="website-table website-table--fixed" aria-label="Per-publisher current prices">
+      {filtersActive && (
+        <div className="website-table__filter-status" aria-live="polite">
+          <span>{fmtNum(filteredSorted.length)} of {fmtNum(rows.length)} shown</span>
+          <button type="button" onClick={clearFilters}>Clear filters</button>
+        </div>
+      )}
       <table>
         <colgroup>
           <col className="website-table__col" />
@@ -188,11 +258,93 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
               </button>
             </th>
           </tr>
+          <tr className="website-table__filters">
+            <th>
+              <input
+                type="search"
+                value={urlFilter}
+                onChange={(event) => setUrlFilter(event.target.value)}
+                placeholder="Search URL"
+                aria-label="Filter Live URL"
+              />
+            </th>
+            <th>
+              <div className="website-table__filter-range">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={priceMin}
+                  onChange={(event) => setPriceMin(event.target.value)}
+                  placeholder="Min"
+                  aria-label="Minimum current price"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={priceMax}
+                  onChange={(event) => setPriceMax(event.target.value)}
+                  placeholder="Max"
+                  aria-label="Maximum current price"
+                />
+              </div>
+            </th>
+            <th>
+              <div className="website-table__filter-range">
+                <input
+                  type="date"
+                  min="2026-01-01"
+                  max="2026-12-31"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  aria-label="As of date from"
+                />
+                <input
+                  type="date"
+                  min="2026-01-01"
+                  max="2026-12-31"
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  aria-label="As of date to"
+                />
+              </div>
+            </th>
+            <th>
+              <div className="website-table__filter-range">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={historyMin}
+                  onChange={(event) => setHistoryMin(event.target.value)}
+                  placeholder="Min"
+                  aria-label="Minimum history count"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={historyMax}
+                  onChange={(event) => setHistoryMax(event.target.value)}
+                  placeholder="Max"
+                  aria-label="Maximum history count"
+                />
+              </div>
+            </th>
+          </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => {
+          {filteredSorted.length === 0 ? (
+            <tr>
+              <td className="website-table__filtered-empty" colSpan={4}>
+                <strong>No live URLs match these filters</strong>
+                Adjust the active column filters or clear them above.
+              </td>
+            </tr>
+          ) : filteredSorted.map((r) => {
             // websiteCurrentPrices guarantees current_price_live_url is set
-            // (it filters out rows with no col L); fallback kept for the
+            // (it filters out rows with no Live URL); fallback kept for the
             // legacy back-compat path where tests pass rows with null.
             const displayUrl = r.current_price_live_url ?? r.website;
             const href = safeExternalHref(displayUrl);

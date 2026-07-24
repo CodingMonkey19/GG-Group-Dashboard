@@ -29,7 +29,7 @@
 - Create: `frontend/src/components/CompareSelector.tsx`
 - Modify: `frontend/src/App.tsx`
 
-- [ ] **Step 1: Create the comparison selection contract and resolver**
+- [x] **Step 1: Create the comparison selection contract and resolver**
 
 ```tsx
 export type ComparisonSelection = 'off' | 'previous' | `month:${string}`;
@@ -49,7 +49,7 @@ export function resolveComparisonMonth(
 }
 ```
 
-- [ ] **Step 2: Render a labeled Compare dropdown**
+- [x] **Step 2: Render a labeled Compare dropdown**
 
 The dropdown uses `Off`, `Previous month`, and every available 2026 month other than the current month. It receives `disabled={scope === 'year'}` and renders only on the Spend view.
 
@@ -63,7 +63,7 @@ The dropdown uses `Off`, `Previous month`, and every available 2026 month other 
 />
 ```
 
-- [ ] **Step 3: Reset invalid comparison state**
+- [x] **Step 3: Reset invalid comparison state**
 
 Add an effect in `App` that sets comparison to `off` when the scope changes to year or `resolveComparisonMonth(...)` returns `null` for a non-off selection.
 
@@ -74,7 +74,7 @@ Add an effect in `App` that sets comparison to `off` when the scope changes to y
 - Modify: `frontend/src/components/KpiCard.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Derive the comparison summary through the existing selector**
+- [x] **Step 1: Derive the comparison summary through the existing selector**
 
 ```tsx
 const comparisonSummary = useMemo(
@@ -89,7 +89,7 @@ const comparisonSummary = useMemo(
 );
 ```
 
-- [ ] **Step 2: Build safe comparison display data**
+- [x] **Step 2: Build safe comparison display data**
 
 Use one formatter that returns the comparison label/value, signed absolute EUR change, and percentage. When baseline is zero, return `New` instead of dividing.
 
@@ -102,7 +102,7 @@ function comparisonDelta(current: number, baseline: number): { change: number; p
 }
 ```
 
-- [ ] **Step 3: Extend `KpiCard` with optional comparison content**
+- [x] **Step 3: Extend `KpiCard` with optional comparison content**
 
 ```ts
 interface KpiComparison {
@@ -116,7 +116,7 @@ interface KpiComparison {
 
 Render `vs Jun 2026 · €…` and the signed delta under the main KPI value. Neutral Spend uses blue; Savings uses green for increases and red for decreases.
 
-- [ ] **Step 4: Remove the supporting KPI row**
+- [x] **Step 4: Remove the supporting KPI row**
 
 Delete the `Rows Done`, `Paid`, and `Outstanding` card section and remove now-unused `outstandingEur`/`outstandingCount` calculations. Keep the briefing counts, hero cards, charts, and drill-downs.
 
@@ -126,7 +126,7 @@ Delete the `Rows Done`, `Paid`, and `Outstanding` card section and remove now-un
 - Modify: `frontend/src/components/WebsiteTable.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Add local filter state and parsing helpers**
+- [x] **Step 1: Add local filter state and parsing helpers**
 
 ```tsx
 const [urlFilter, setUrlFilter] = useState('');
@@ -144,15 +144,15 @@ function optionalNumber(value: string): number | null {
 }
 ```
 
-- [ ] **Step 2: Filter before the existing sort**
+- [x] **Step 2: Filter before the existing sort**
 
 The memoized row derivation performs case-insensitive URL containment, inclusive numeric/date bounds, and excludes null price/date only when their matching bounds are active. The existing deterministic sort then runs on the filtered copy.
 
-- [ ] **Step 3: Render the filter row**
+- [x] **Step 3: Render the filter row**
 
 Add one labeled control group per column under the header buttons: URL search, price Min/Max, date From/To, and history Min/Max. Every control gets a unique accessible label and 2026 date bounds.
 
-- [ ] **Step 4: Render result status and reset behavior**
+- [x] **Step 4: Render result status and reset behavior**
 
 Show `X of Y shown` and a `Clear filters` button when any filter is active. When no row matches, show `No live URLs match these filters` plus the same reset action. The source-empty state remains unchanged when the input `rows` array is empty.
 
@@ -163,19 +163,19 @@ Show `X of Y shown` and a `Clear filters` button when any filter is active. When
 - Create: `frontend/tests/components/CompareSelector.test.tsx`
 - Create: `frontend/tests/components/KpiCard.test.tsx`
 
-- [ ] **Step 1: Test table filtering and reset**
+- [x] **Step 1: Test table filtering and reset**
 
 Render three `WebsiteCurrentPrice` fixtures, change each control with Testing Library, assert visible/hidden live URLs, combine filters, assert the filtered-empty message, click Clear filters, and assert all three rows return.
 
-- [ ] **Step 2: Test comparison selection**
+- [x] **Step 2: Test comparison selection**
 
 Assert `resolveComparisonMonth('previous', '04', ['01', '03', '04']) === '03'`, invalid/current custom comparisons resolve to null, and the dropdown never renders a 2025 option.
 
-- [ ] **Step 3: Test KPI comparison display**
+- [x] **Step 3: Test KPI comparison display**
 
 Render one ordinary comparison and one zero-baseline comparison; assert the month/value, signed delta, percentage, direction class, and `New` output.
 
-- [ ] **Step 4: Run focused verification**
+- [x] **Step 4: Run focused verification**
 
 Run: `npm test -- --run tests/components/WebsiteTable.test.tsx tests/components/CompareSelector.test.tsx tests/components/KpiCard.test.tsx`
 
@@ -186,17 +186,17 @@ Expected: all new component tests pass.
 **Files:**
 - Verify all modified frontend files and the approved design requirements.
 
-- [ ] **Step 1: Run frontend checks**
+- [x] **Step 1: Run frontend checks**
 
 Run `npm run typecheck`, `npm test`, and `npm run build` from `frontend/`.
 
 Expected: typecheck exits 0, every frontend test passes, and Vite produces `frontend/dist`.
 
-- [ ] **Step 2: Restart the local server and verify the live UI**
+- [x] **Step 2: Restart the local server and verify the live UI**
 
 Refresh `http://127.0.0.1:8080/` and verify: all 699 rows restore after Clear filters; all four column filters work; supporting cards are absent; month/project comparisons update Spend and Savings; comparison is disabled for 2026 Total; no 2025 option or data is visible.
 
-- [ ] **Step 3: Review and commit**
+- [x] **Step 3: Review and commit**
 
 Run `git diff --check`, review the focused diff, stage only the planned files, and commit with:
 

@@ -101,6 +101,7 @@ button, select, input { font-family: inherit; color: inherit; }
 .select select:focus { outline: 2px solid var(--accent-2); outline-offset: -1px; }
 .select select:disabled { cursor: not-allowed; opacity: 0.55; background: var(--bg-deep); }
 .select__chev { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--ink-3); pointer-events: none; }
+.compare-selector__select { min-width: 176px !important; }
 
 .topbar__refresh { display: flex; align-items: center; gap: 14px; }
 .btn {
@@ -287,11 +288,12 @@ button, select, input { font-family: inherit; color: inherit; }
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 8px; border-radius: 999px;
   font: 600 11px var(--mono);
-  background: rgba(30,122,77,0.1); color: var(--paid);
+  white-space: nowrap;
 }
-.kpi__delta-arrow { font-size: 9px; }
-.kpi__delta--down { background: var(--err-soft); color: var(--err); }
-.kpi__delta--down .kpi__delta-arrow { transform: rotate(180deg); }
+.kpi__delta--neutral { background: rgba(44,99,214,0.10); color: var(--accent-2); }
+.kpi__delta--favorable.kpi__delta--up { background: rgba(30,122,77,0.10); color: var(--paid); }
+.kpi__delta--favorable.kpi__delta--down { background: var(--err-soft); color: var(--err); }
+.kpi__delta--flat { background: var(--bg-deep); color: var(--ink-3); }
 .kpi__value, .summary-card__value {
   font: 700 30px var(--font);
   letter-spacing: -0.02em;
@@ -303,6 +305,16 @@ button, select, input { font-family: inherit; color: inherit; }
 .kpi__sub, .summary-card__sub {
   font: 500 13px var(--font); color: var(--ink-3); margin-top: auto;
 }
+.kpi__comparison {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.kpi__comparison-copy { font: 500 12px var(--font); color: var(--ink-3); }
+.kpi__comparison-copy strong { color: var(--ink-2); font-weight: 600; }
 .kpi__sub strong { color: var(--ink-2); font-weight: 600; }
 .kpi--clickable {
   appearance: none;
@@ -479,7 +491,7 @@ button, select, input { font-family: inherit; color: inherit; }
 .ranked__sub   { font: 500 12px var(--font); color: var(--ink-3); text-align: right; }
 
 /* ---------- Website table ---------- */
-.website-table { overflow: hidden; border-radius: var(--r-sm); border: 1px solid var(--line); margin: 4px 0 0; }
+.website-table { overflow-x: auto; border-radius: var(--r-sm); border: 1px solid var(--line); margin: 4px 0 0; }
 .website-table table { width: 100%; border-collapse: collapse; }
 .website-table thead { background: var(--bg-deep); }
 .website-table th {
@@ -510,6 +522,51 @@ button, select, input { font-family: inherit; color: inherit; }
 .website-table__status--unknown,
 .website-table__status--missing { background: var(--warn-soft); color: var(--warn); }
 .website-table__undated-badge   { color: var(--warn); font-size: 11px; }
+.website-table__filter-status {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 14px;
+  background: var(--info-soft);
+  border-bottom: 1px solid var(--line);
+  color: var(--info);
+  font: 600 11px var(--mono);
+}
+.website-table__filter-status button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent-2);
+  font: 600 12px var(--font);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.website-table__filters th { padding: 8px 10px 10px; background: var(--surface); }
+.website-table__filters input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 12px var(--font);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.website-table__filters input:focus { outline: 2px solid var(--accent-2); outline-offset: -1px; }
+.website-table__filters input::placeholder { color: var(--ink-4); }
+.website-table__filter-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.website-table td.website-table__filtered-empty {
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--ink-3);
+}
+.website-table__filtered-empty strong { display: block; margin-bottom: 8px; color: var(--ink); }
 
 /* Fixed-layout variant — equal column widths regardless of URL length. */
 .website-table--fixed table { table-layout: fixed; width: 100%; }

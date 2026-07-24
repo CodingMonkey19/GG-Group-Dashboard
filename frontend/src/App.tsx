@@ -37,8 +37,13 @@ import {
   scopeLabelFor,
 } from './lib/format';
 import { Briefing } from './components/Briefing';
+import {
+  CompareSelector,
+  resolveComparisonMonth,
+  type ComparisonSelection,
+} from './components/CompareSelector';
 import { DonutChart } from './components/DonutChart';
-import { KpiCard } from './components/KpiCard';
+import { KpiCard, type KpiComparison } from './components/KpiCard';
 import { LineChart } from './components/LineChart';
 import { MonthSelector } from './components/MonthSelector';
 import { OrderFilter } from './components/OrderFilter';
@@ -82,6 +87,7 @@ export function App(): JSX.Element {
   const [scope, setScope] = useState<Scope>('month');
   const [month, setMonth] = useState<string>('');
   const [order, setOrder] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<ComparisonSelection>('off');
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
 
   // Refresh-state (formerly useFreshnessRefresh) inlined.
@@ -175,6 +181,7 @@ export function App(): JSX.Element {
   const selectedMonth = monthOptions.includes(month)
     ? month
     : (monthOptions.at(-1) ?? '01');
+  const compareMonth = resolveComparisonMonth(comparison, selectedMonth, monthOptions);
   const orders = useMemo(() => (data !== null ? distinctOrderCodes(data) : []), [data]);
 
   // Open on the latest available 2026 month and retain valid selections.
@@ -183,6 +190,12 @@ export function App(): JSX.Element {
       setMonth(monthOptions.at(-1) ?? '01');
     }
   }, [month, monthOptions]);
+
+  useEffect(() => {
+    if (scope === 'year' || (comparison !== 'off' && compareMonth === null)) {
+      setComparison('off');
+    }
+  }, [scope, comparison, compareMonth]);
 
   // Reset selected order if it disappears from the snapshot.
   useEffect(() => {
@@ -214,6 +227,15 @@ export function App(): JSX.Element {
               disabled={scope === 'year'}
             />
             <OrderFilter orders={orders} value={order} onChange={setOrder} />
+            {view === 'spend' && (
+              <CompareSelector
+                months={monthOptions}
+                currentMonth={selectedMonth}
+                value={comparison}
+                onChange={setComparison}
+                disabled={scope === 'year'}
+              />
+            )}
           </div>
         )}
 
@@ -257,6 +279,7 @@ export function App(): JSX.Element {
           view,
           scope,
           month: selectedMonth,
+          compareMonth,
           order,
           orders,
           today,
@@ -292,6 +315,7 @@ function renderMain({
   view,
   scope,
   month,
+  compareMonth,
   order,
   orders,
   today,
@@ -302,6 +326,7 @@ function renderMain({
   view: View;
   scope: Scope;
   month: string;
+  compareMonth: string | null;
   order: string | null;
   orders: string[];
   today: string;
@@ -353,6 +378,7 @@ function renderMain({
           data={state.data}
           scopeMode={scope}
           month={month}
+          compareMonth={compareMonth}
           order={order}
           orders={orders}
           today={today}
@@ -368,10 +394,35 @@ function renderMain({
 /* SpendView — HANDOFF §5 layout.                                            */
 /* ----------------------------------------------------------------------- */
 
+function buildKpiComparison(
+  label: string,
+  current: number,
+  baseline: number,
+  tone: KpiComparison['tone'],
+): KpiComparison {
+  const change = Math.round((current - baseline) * 100) / 100;
+  const direction: KpiComparison['direction'] = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  const amountPrefix = change > 0 ? '+' : change < 0 ? '-' : '';
+  const signedAmount = `${amountPrefix}${fmtEur(Math.abs(change))}`;
+  const percent = baseline === 0 ? null : (change / baseline) * 100;
+  const percentLabel = percent === null
+    ? 'New'
+    : `${percent > 0 ? '+' : ''}${percent.toFixed(1).replace(/\.0$/, '')}%`;
+
+  return {
+    label: `vs ${label}`,
+    value: fmtEur(baseline),
+    delta: `${signedAmount} · ${percentLabel}`,
+    direction,
+    tone,
+  };
+}
+
 interface SpendViewProps {
   data: ApiDataResponse;
   scopeMode: Scope;
   month: string;
+  compareMonth: string | null;
   order: string | null;
   orders: string[];
   today: string;
@@ -383,6 +434,7 @@ function SpendView({
   data,
   scopeMode,
   month,
+  compareMonth,
   order,
   orders,
   today,
@@ -398,6 +450,16 @@ function SpendView({
   const summary = useMemo(
     () => spendInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
     [data, scope.year, scope.month, scope.orderCode, today],
+  );
+  const comparisonSummary = useMemo(
+    () => compareMonth === null
+      ? null
+      : spendInScope(data, {
+          year: REPORTING_YEAR,
+          month: compareMonth,
+          orderCode: order,
+        }, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, compareMonth, order, today],
   );
   const breakdowns = useMemo(
     () => monthlyBreakdowns(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
@@ -430,12 +492,20 @@ function SpendView({
   const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
   const linksInScope = summary.count;
   const activeCount = isSingleProj ? 1 : ranked.length;
-  const outstandingEur = summary.by_status.unpaid.spend_eur
-    + summary.by_status.unknown.spend_eur
-    + summary.by_status.missing.spend_eur;
-  const outstandingCount = summary.by_status.unpaid.count
-    + summary.by_status.unknown.count
-    + summary.by_status.missing.count;
+  const comparisonLabel = compareMonth === null
+    ? null
+    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth });
+  const spendComparison = comparisonSummary === null || comparisonLabel === null
+    ? undefined
+    : buildKpiComparison(comparisonLabel, summary.eur, comparisonSummary.eur, 'neutral');
+  const savingsComparison = comparisonSummary === null || comparisonLabel === null
+    ? undefined
+    : buildKpiComparison(
+        comparisonLabel,
+        summary.savings_eur,
+        comparisonSummary.savings_eur,
+        'favorable',
+      );
   const drawerRows = useMemo(
     () => drillRowsForScope(
       data,
@@ -478,6 +548,7 @@ function SpendView({
           tooltip="Click to see the contributing 2026 invoices."
           value={fmtEur(summary.eur)}
           sub={scopeLabel}
+          {...(spendComparison === undefined ? {} : { comparison: spendComparison })}
           onClick={openHeadlineRows}
         />
         <KpiCard
@@ -486,30 +557,8 @@ function SpendView({
           tooltip="Click to see the same contributing 2026 invoices."
           value={fmtEur(summary.savings_eur)}
           sub={scopeLabel}
+          {...(savingsComparison === undefined ? {} : { comparison: savingsComparison })}
           onClick={openHeadlineRows}
-        />
-      </section>
-
-      <section className="kpi-row" aria-label={`${scopeLabel} supporting metrics`}>
-        <KpiCard
-          label="Rows Done"
-          tooltip="Converted Done rows included in this 2026 scope."
-          value={fmtNum(linksInScope)}
-          sub={scopeLabel}
-        />
-        <KpiCard
-          label="Paid"
-          accent="paid"
-          tooltip="Spend on rows marked paid in this 2026 scope."
-          value={fmtEur(summary.by_status.paid.spend_eur)}
-          sub={`${fmtNum(summary.by_status.paid.count)} rows`}
-        />
-        <KpiCard
-          label="Outstanding"
-          accent="unpaid"
-          tooltip="Unpaid, unknown, or missing payment status in this 2026 scope."
-          value={fmtEur(outstandingEur)}
-          sub={`${fmtNum(outstandingCount)} rows`}
         />
       </section>
 
