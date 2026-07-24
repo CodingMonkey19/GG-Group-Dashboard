@@ -27,6 +27,7 @@ const REPORT_CONFIG: ReportSourceConfig = {
     website: 'Website',
     spend_eur: 'Price (EUR)',
     invoice_url: 'Invoice',
+    live_url: 'Live URL',
     invoice_status: 'Invoice Status',
     included: 'Included in Reporting Period',
     data_quality_issue: 'Data Quality Issue',
@@ -108,12 +109,13 @@ describe('readReportSource', () => {
       tab_name: 'January 2026',
       row_index: 5,
       source_mode: 'report',
+      live_url: 'https://alpha.example/article-a',
     });
     expect(batch.rows[0]?.source_row_key).toBe(sourceRowKey(
       'REPORT_2026',
       'Clean Data',
       4,
-      ['ORDER-A', 'January 2026', '5', '15/01/2026', 'January 2026', 'Ada', 'alpha.example', '€100.00', 'https://invoice/a-jan', 'Paid', 'TRUE', '', '€10.01'],
+      ['ORDER-A', 'January 2026', '5', '15/01/2026', 'January 2026', 'Ada', 'alpha.example', '€100.00', 'https://invoice/a-jan', 'Paid', 'TRUE', '', '€10.01', 'https://alpha.example/article-a'],
     ));
     expect(batch.monthlySummary[1]?.cells).toEqual(['46023', '100', '10.005']);
     expect(batch.orderSummary[1]?.cells).toEqual([

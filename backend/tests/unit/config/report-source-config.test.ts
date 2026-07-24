@@ -23,6 +23,7 @@ const REPORT_CONFIG = {
       website: 'Website',
       spend_eur: 'Price (EUR)',
       invoice_url: 'Invoice',
+      live_url: 'Live URL',
       invoice_status: 'Invoice Status',
       included: 'Included in Reporting Period',
       data_quality_issue: 'Data Quality Issue',

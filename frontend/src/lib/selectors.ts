@@ -277,8 +277,8 @@ export interface WebsiteCurrentPrice {
    */
   current_price_payment_status: PaymentStatus | null;
   /**
-   * Column-L live URL (the actual published article URL) of the chosen
-   * current-price row. Null when the row had no live_url cell or when
+   * Published article URL from the chosen current-price row. Null when
+   * the row had no live_url cell or when
    * the website has only undated invoices.
    */
   current_price_live_url: string | null;
@@ -309,7 +309,7 @@ export function websiteCurrentPrices(
   today: string = NO_FUTURE_FILTER,
   minRowsPerYear: number = 0,
   /**
-   * When true, drop rows whose `live_url` (column L) is empty so the view
+   * When true, drop rows whose `live_url` field is empty so the view
    * doesn't fall back to showing a bare publisher domain (which looks like
    * a homepage to the operator). Production passes true; legacy tests
    * with pre-`live_url` fixtures default to false so they keep passing.

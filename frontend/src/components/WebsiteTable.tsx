@@ -2,7 +2,7 @@
  * WebsiteTable — per-publisher current-price grid (US4 / FR-014).
  *
  * Operator-facing column copy:
- *   • Live URL — most-recent dated invoice's column-L value (falls back to
+ *   • Live URL — most-recent dated invoice's published-article URL (falls back to
  *     the canonical website domain when the cell is blank). Rendered as a
  *     clickable link that opens the article in a new tab. Row remains
  *     clickable for drill-down; the link uses `stopPropagation` so it
@@ -134,7 +134,7 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
         <h2>No live URLs yet</h2>
         <p>
           Per-link prices will appear once the consolidated store contains at least one Done
-          invoice with a live URL on column L.
+          invoice with a Live URL.
         </p>
       </div>
     );

@@ -153,7 +153,7 @@ export async function readReportSource(
       link_builder: formattedCell(formatted, columns.link_builder),
       target_url: undefined,
       anchor: undefined,
-      live_url: undefined,
+      live_url: formattedCell(formatted, columns.live_url),
     });
   }
 

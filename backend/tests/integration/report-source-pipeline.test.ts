@@ -21,7 +21,7 @@ function reportConfig(): string {
       headers: {
         order: 'Order', source_tab: 'Source Tab', source_row: 'Source Row',
         invoice_date: 'Invoice Date', reporting_month: 'Month', link_builder: 'Link Builder',
-        website: 'Website', spend_eur: 'Price (EUR)', invoice_url: 'Invoice',
+        website: 'Website', spend_eur: 'Price (EUR)', invoice_url: 'Invoice', live_url: 'Live URL',
         invoice_status: 'Invoice Status', included: 'Included in Reporting Period',
         data_quality_issue: 'Data Quality Issue', savings_eur: 'Saving (EUR)',
       },
@@ -96,6 +96,7 @@ describe('report source consolidation', () => {
         { order_code: 'ORDER-B', invoice_month: '2026-07', savings_eur: 5.125 },
       ]);
       expect(db.prepare('SELECT SUM(savings_eur) AS total FROM invoices').get()).toEqual({ total: 35.13 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices WHERE live_url IS NOT NULL').get()).toEqual({ count: 3 });
       const issue = db.prepare("SELECT audit_flags FROM invoices WHERE order_code='ORDER-B'").get() as { audit_flags: string };
       expect(JSON.parse(issue.audit_flags)).toContain('source_data_quality_issue:needs receipt');
       expect(db.prepare('SELECT COUNT(*) AS count FROM audit_findings').get()).toEqual({ count: 0 });

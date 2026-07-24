@@ -159,6 +159,7 @@ export const ReportSourceHeaderMapping = z
     website: z.string().min(1),
     spend_eur: z.string().min(1),
     invoice_url: z.string().min(1),
+    live_url: z.string().min(1),
     invoice_status: z.string().min(1),
     included: z.string().min(1),
     data_quality_issue: z.string().min(1),
