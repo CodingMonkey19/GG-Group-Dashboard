@@ -14,6 +14,7 @@ interface Props {
    * tooltip. Operator can read the metric definition without leaving the row.
    */
   tooltip?: string;
+  onClick?: () => void;
 }
 
 export function KpiCard({
@@ -24,10 +25,11 @@ export function KpiCard({
   delta,
   deltaDir = 'up',
   tooltip,
+  onClick,
 }: Props): JSX.Element {
-  const className = `kpi${accent ? ` kpi--${accent}` : ''}`;
-  return (
-    <div className={className} title={tooltip}>
+  const className = `kpi${accent ? ` kpi--${accent}` : ''}${onClick ? ' kpi--clickable' : ''}`;
+  const content = (
+    <>
       <div className="kpi__head">
         <span className="kpi__label">
           {label}
@@ -45,6 +47,16 @@ export function KpiCard({
       </div>
       <div className="kpi__value">{value}</div>
       <div className="kpi__sub">{sub}</div>
-    </div>
+    </>
   );
+
+  if (onClick !== undefined) {
+    return (
+      <button type="button" className={className} title={tooltip} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className} title={tooltip}>{content}</div>;
 }

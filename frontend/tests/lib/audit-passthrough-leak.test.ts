@@ -28,7 +28,8 @@ import type { ApiDataResponse } from '../../src/lib/contracts';
 
 function envelopeWithAudit(audit: Record<string, unknown>): ApiDataResponse {
   return {
-    schema_version: 1,
+    schema_version: 2,
+    reporting_year: 2026,
     last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success',
     duration_ms: 1234,

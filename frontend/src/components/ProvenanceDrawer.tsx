@@ -136,8 +136,10 @@ function ProvenanceRow({ row }: { row: InvoiceRow }): JSX.Element {
         </dd>
         <dt>Invoice date</dt>
         <dd>{row.invoice_date ?? `Undated (date_source=${row.date_source})`}</dd>
-        <dt>Headline total</dt>
+        <dt>Spend</dt>
         <dd>{row.eur_amount !== null ? fmtEur(row.eur_amount) : '—'}</dd>
+        <dt>Savings</dt>
+        <dd>{fmtEur(row.savings_eur)}</dd>
         <dt>Artifact</dt>
         <dd>
           {renderArtifactCell(row, link)}

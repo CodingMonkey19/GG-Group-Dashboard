@@ -20,7 +20,7 @@
  * SSE event emission is supported via the optional `onEvent` callback.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Database as DatabaseT } from 'better-sqlite3';
 import { loadSheetsConfig } from '../config/load.js';
@@ -368,6 +368,10 @@ export async function consolidate(opts: CliConsolidateOptions): Promise<Consolid
   const dataDir = resolve(opts.dataDir);
   const livePath = resolve(dataDir, 'consolidated.sqlite');
   const stagingPath = resolve(dataDir, 'consolidated.sqlite.new');
+
+  // A fresh clone has no ignored data directory yet. Create it before
+  // better-sqlite3 opens the staging database.
+  mkdirSync(dataDir, { recursive: true });
 
   // Drop any leftover staging file from a previous failed run.
   if (existsSync(stagingPath)) {

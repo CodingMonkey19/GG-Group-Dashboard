@@ -80,10 +80,44 @@ export function resolveDate(input: ResolveDateInput): ResolvedDate {
  * default) since the user is in Vilnius and most invoices use that form. If the
  * data set later shows otherwise, override here.
  */
-export function parseDateCell(rawCell: string | undefined): string | null {
+export type NumericDateOrder = 'eu' | 'us' | 'ambiguous';
+
+/** Infer the numeric date convention from unambiguous cells in one source tab. */
+export function detectNumericDateOrder(values: readonly string[]): NumericDateOrder {
+  let hasEuEvidence = false;
+  let hasUsEvidence = false;
+
+  for (const value of values) {
+    const match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/.exec(value.trim());
+    if (!match) continue;
+    const first = Number.parseInt(match[1]!, 10);
+    const second = Number.parseInt(match[2]!, 10);
+    const year = match[3]!.length === 2 ? `20${match[3]!}` : match[3]!;
+    const eu = validIso(year, String(second), String(first));
+    const us = validIso(year, String(first), String(second));
+    if (eu !== null && us === null) hasEuEvidence = true;
+    if (us !== null && eu === null) hasUsEvidence = true;
+    if (hasEuEvidence && hasUsEvidence) return 'ambiguous';
+  }
+
+  return hasUsEvidence ? 'us' : 'eu';
+}
+
+export function parseDateCell(
+  rawCell: string | undefined,
+  numericDateOrder: NumericDateOrder = 'eu',
+): string | null {
   if (rawCell === undefined) return null;
   const trimmed = rawCell.trim();
   if (trimmed.length === 0) return null;
+
+  // Executive summaries use labels such as "Jan 2026" and
+  // "July 1-22, 2026". They represent the first day of that month.
+  const writtenMonth = /^([A-Za-z]+)(?:\s+\d{1,2}-\d{1,2},?)?\s+(\d{4})$/.exec(trimmed);
+  if (writtenMonth) {
+    const month = WRITTEN_MONTHS[writtenMonth[1]!.toLowerCase()];
+    if (month !== undefined) return validIso(writtenMonth[2]!, String(month), '1');
+  }
 
   // ISO YYYY-MM-DD (with optional time suffix).
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
@@ -92,11 +126,18 @@ export function parseDateCell(rawCell: string | undefined): string | null {
     return validIso(y!, m!, d!);
   }
 
-  // DD.MM.YYYY or DD/MM/YYYY (EU/LT default).
-  const euMatch = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(trimmed);
-  if (euMatch) {
-    const [, d, m, y] = euMatch;
-    return validIso(y!, m!.padStart(2, '0'), d!.padStart(2, '0'));
+  // DD/MM/YYYY or MM/DD/YYYY using the convention inferred per source tab.
+  const numericMatch = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/.exec(trimmed);
+  if (numericMatch) {
+    const [, first, second, rawYear] = numericMatch;
+    const year = rawYear!.length === 2 ? `20${rawYear!}` : rawYear!;
+    const eu = validIso(year, second!, first!);
+    const us = validIso(year, first!, second!);
+    if (eu === null) return us;
+    if (us === null) return eu;
+    if (eu === us) return eu;
+    if (numericDateOrder === 'ambiguous') return null;
+    return numericDateOrder === 'eu' ? eu : us;
   }
 
   // YYYY/MM/DD or YYYY.MM.DD.
@@ -123,6 +164,32 @@ export function parseDateCell(rawCell: string | undefined): string | null {
 
   return null;
 }
+
+const WRITTEN_MONTHS: Readonly<Record<string, number>> = {
+  january: 1,
+  jan: 1,
+  february: 2,
+  feb: 2,
+  march: 3,
+  mar: 3,
+  april: 4,
+  apr: 4,
+  may: 5,
+  june: 6,
+  jun: 6,
+  july: 7,
+  jul: 7,
+  august: 8,
+  aug: 8,
+  september: 9,
+  sep: 9,
+  october: 10,
+  oct: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
+};
 
 function validIso(y: string, m: string, d: string): string | null {
   const yy = Number.parseInt(y, 10);

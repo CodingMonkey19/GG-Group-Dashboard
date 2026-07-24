@@ -19,9 +19,8 @@ import { ApiError, fetchData, subscribeRefresh } from './lib/api';
 import type { ApiDataResponse, InvoiceRow } from './lib/contracts';
 import {
   distinctOrderCodes,
-  distinctYears,
+  drillRowsForScope,
   drillRowsForWebsite,
-  lifetimeRowsDoneFor,
   MIN_VISIBLE_YEAR_ROWS,
   monthlyBreakdowns,
   monthsInYear,
@@ -46,10 +45,12 @@ import { OrderFilter } from './components/OrderFilter';
 import { Panel } from './components/Panel';
 import { ProvenanceDrawer } from './components/ProvenanceDrawer';
 import { RankedBars } from './components/RankedBars';
+import { ScopeToggle, type Scope } from './components/ScopeToggle';
 import { StackedBars } from './components/StackedBars';
 import { ViewToggle, type View } from './components/ViewToggle';
 import { WebsiteTable } from './components/WebsiteTable';
-import { YearFilter } from './components/YearFilter';
+
+const REPORTING_YEAR = '2026';
 
 interface DrawerState {
   title: string;
@@ -78,8 +79,8 @@ type LoadState =
 export function App(): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [view, setView] = useState<View>('spend');
-  const [year, setYear] = useState<string>('all');
-  const [month, setMonth] = useState<string>('all');
+  const [scope, setScope] = useState<Scope>('month');
+  const [month, setMonth] = useState<string>('');
   const [order, setOrder] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
 
@@ -164,29 +165,24 @@ export function App(): JSX.Element {
   // those rows under `future_dated_invoice` — this is purely a UI hide.
   const today = useMemo(() => todayIsoDateUtc(), [now]);
 
-  const years = useMemo(
-    () => (data !== null ? distinctYears(data, today, MIN_VISIBLE_YEAR_ROWS) : []),
-    [data, today],
-  );
   const monthOptions = useMemo(
     () =>
-      data !== null && year !== 'all'
-        ? monthsInYear(data, year, today, MIN_VISIBLE_YEAR_ROWS)
+      data !== null
+        ? monthsInYear(data, REPORTING_YEAR, today, MIN_VISIBLE_YEAR_ROWS)
         : [],
-    [data, year, today],
+    [data, today],
   );
+  const selectedMonth = monthOptions.includes(month)
+    ? month
+    : (monthOptions.at(-1) ?? '01');
   const orders = useMemo(() => (data !== null ? distinctOrderCodes(data) : []), [data]);
 
-  // Auto-reset month when year changes (HANDOFF §5).
+  // Open on the latest available 2026 month and retain valid selections.
   useEffect(() => {
-    if (year === 'all' && month !== 'all') {
-      setMonth('all');
-      return;
+    if (monthOptions.length > 0 && !monthOptions.includes(month)) {
+      setMonth(monthOptions.at(-1) ?? '01');
     }
-    if (year !== 'all' && month !== 'all' && !monthOptions.includes(month)) {
-      setMonth('all');
-    }
-  }, [year, month, monthOptions]);
+  }, [month, monthOptions]);
 
   // Reset selected order if it disappears from the snapshot.
   useEffect(() => {
@@ -211,12 +207,11 @@ export function App(): JSX.Element {
 
         {data !== null && (
           <div className="topbar__filters">
-            <YearFilter years={years} value={year} onChange={setYear} />
             <MonthSelector
-              visible={year !== 'all'}
               months={monthOptions}
-              value={month}
+              value={selectedMonth}
               onChange={setMonth}
+              disabled={scope === 'year'}
             />
             <OrderFilter orders={orders} value={order} onChange={setOrder} />
           </div>
@@ -252,6 +247,7 @@ export function App(): JSX.Element {
       {data !== null && (
         <div className="view-toggle-row">
           <ViewToggle value={view} onChange={setView} />
+          {view === 'spend' && <ScopeToggle value={scope} onChange={setScope} />}
         </div>
       )}
 
@@ -259,8 +255,8 @@ export function App(): JSX.Element {
         {renderMain({
           state,
           view,
-          year,
-          month,
+          scope,
+          month: selectedMonth,
           order,
           orders,
           today,
@@ -294,7 +290,7 @@ function countFailedSources(data: ApiDataResponse): number {
 function renderMain({
   state,
   view,
-  year,
+  scope,
   month,
   order,
   orders,
@@ -304,7 +300,7 @@ function renderMain({
 }: {
   state: LoadState;
   view: View;
-  year: string;
+  scope: Scope;
   month: string;
   order: string | null;
   orders: string[];
@@ -355,7 +351,7 @@ function renderMain({
       return (
         <SpendView
           data={state.data}
-          year={year}
+          scopeMode={scope}
           month={month}
           order={order}
           orders={orders}
@@ -374,7 +370,7 @@ function renderMain({
 
 interface SpendViewProps {
   data: ApiDataResponse;
-  year: string;
+  scopeMode: Scope;
   month: string;
   order: string | null;
   orders: string[];
@@ -385,7 +381,7 @@ interface SpendViewProps {
 
 function SpendView({
   data,
-  year,
+  scopeMode,
   month,
   order,
   orders,
@@ -393,7 +389,11 @@ function SpendView({
   refreshError,
   onDrillDown,
 }: SpendViewProps): JSX.Element {
-  const scope: SpendScope = { year, month, orderCode: order };
+  const scope: SpendScope = {
+    year: REPORTING_YEAR,
+    month: scopeMode === 'year' ? 'all' : month,
+    orderCode: order,
+  };
 
   const summary = useMemo(
     () => spendInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
@@ -423,36 +423,40 @@ function SpendView({
     [data, order, today],
   );
 
-  const isAllTime = year === 'all';
   const isSingleProj = order !== null;
-  const scopeLabel = scopeLabelFor({ year, month });
-
-  const linksTotal = isSingleProj && order !== null
-    ? lifetimeRowsDoneFor(data, order, today, MIN_VISIBLE_YEAR_ROWS)
-    : data.counters.rows_done;
+  const periodLabel = scopeMode === 'year'
+    ? '2026 Total'
+    : scopeLabelFor({ year: REPORTING_YEAR, month });
+  const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
   const linksInScope = summary.count;
-  const avgPerLink = linksInScope > 0 ? summary.eur / linksInScope : 0;
   const activeCount = isSingleProj ? 1 : ranked.length;
-
-  const briefing = makeBriefing({
-    year,
-    month,
-    order,
-    isAllTime,
-    isSingleProj,
-    scopeLabel,
-    summary,
-    activeCount,
-    linksTotal,
-    linksInScope,
-    monthsTrackedAllTime: data.counters.rows_done > 0 ? rowsSeries.months.length : 0,
-  });
+  const outstandingEur = summary.by_status.unpaid.spend_eur
+    + summary.by_status.unknown.spend_eur
+    + summary.by_status.missing.spend_eur;
+  const outstandingCount = summary.by_status.unpaid.count
+    + summary.by_status.unknown.count
+    + summary.by_status.missing.count;
+  const drawerRows = useMemo(
+    () => drillRowsForScope(
+      data,
+      order,
+      scopeMode === 'year' ? null : `${REPORTING_YEAR}-${month}`,
+    ),
+    [data, order, scopeMode, month],
+  );
+  const openHeadlineRows = (): void => {
+    onDrillDown({ title: `${scopeLabel} — contributing rows`, rows: drawerRows });
+  };
 
   const failedSources = data.per_source.filter((s) => s.status === 'failure');
 
   return (
     <>
-      <Briefing eyebrow={briefing.eyebrow} title={briefing.title} lede={briefing.lede} />
+      <Briefing
+        eyebrow={`BRIEFING · ${scopeLabel.toUpperCase()}`}
+        title={scopeMode === 'year' ? '2026 total in review' : `${periodLabel} in review`}
+        lede={`${scopeLabel} includes ${fmtNum(linksInScope)} completed rows, ${fmtEur(summary.eur)} in spend, and ${fmtEur(summary.savings_eur)} in savings${isSingleProj ? '.' : ` across ${fmtNum(activeCount)} projects.`}`}
+      />
 
       {failedSources.length > 0 && (
         <div className="empty-state" role="alert">
@@ -468,34 +472,44 @@ function SpendView({
         </div>
       )}
 
-      <section className="kpi-row" aria-label="Spend KPIs">
+      <section className="hero-row" aria-label={`${scopeLabel} totals`}>
         <KpiCard
-          label="Links built"
-          tooltip="Count of rows marked 'Done' in the status column for this period."
-          value={fmtNum(linksInScope)}
-          sub={isSingleProj && order !== null ? `${order} · ${scopeLabel}` : scopeLabel}
-        />
-        <KpiCard
-          label="Total spend"
-          tooltip="Sum of invoice amounts (EUR) for all Done rows in this scope."
+          label="Total Spend"
+          tooltip="Click to see the contributing 2026 invoices."
           value={fmtEur(summary.eur)}
-          sub={isSingleProj && order !== null ? `${order} · ${scopeLabel}` : scopeLabel}
+          sub={scopeLabel}
+          onClick={openHeadlineRows}
         />
         <KpiCard
-          label="Avg per link"
-          tooltip="Total spend ÷ links built."
-          value={fmtEur(avgPerLink)}
-          sub="per completed link"
+          label="Savings"
+          accent="paid"
+          tooltip="Click to see the same contributing 2026 invoices."
+          value={fmtEur(summary.savings_eur)}
+          sub={scopeLabel}
+          onClick={openHeadlineRows}
+        />
+      </section>
+
+      <section className="kpi-row" aria-label={`${scopeLabel} supporting metrics`}>
+        <KpiCard
+          label="Rows Done"
+          tooltip="Converted Done rows included in this 2026 scope."
+          value={fmtNum(linksInScope)}
+          sub={scopeLabel}
         />
         <KpiCard
-          label={isSingleProj ? 'Project' : 'Active projects'}
-          tooltip={
-            isSingleProj
-              ? 'Currently selected project.'
-              : 'Distinct projects contributing at least one Done row in this scope.'
-          }
-          value={isSingleProj && order !== null ? order : fmtNum(activeCount)}
-          sub={isSingleProj ? 'selected' : 'contributing'}
+          label="Paid"
+          accent="paid"
+          tooltip="Spend on rows marked paid in this 2026 scope."
+          value={fmtEur(summary.by_status.paid.spend_eur)}
+          sub={`${fmtNum(summary.by_status.paid.count)} rows`}
+        />
+        <KpiCard
+          label="Outstanding"
+          accent="unpaid"
+          tooltip="Unpaid, unknown, or missing payment status in this 2026 scope."
+          value={fmtEur(outstandingEur)}
+          sub={`${fmtNum(outstandingCount)} rows`}
         />
       </section>
 
@@ -511,7 +525,7 @@ function SpendView({
         </Panel>
         <Panel
           title="Spend per month"
-          subtitle={isAllTime ? 'EUR · all time' : `EUR · ${scopeLabel}`}
+          subtitle={`EUR · ${scopeLabel}`}
         >
           <StackedBars data={breakdowns} />
         </Panel>
@@ -540,56 +554,6 @@ function SpendView({
       <span hidden>{orders.length}</span>
     </>
   );
-}
-
-function makeBriefing({
-  year,
-  month,
-  order,
-  isAllTime,
-  isSingleProj,
-  scopeLabel,
-  summary,
-  activeCount,
-  linksTotal,
-  linksInScope,
-  monthsTrackedAllTime,
-}: {
-  year: string;
-  month: string;
-  order: string | null;
-  isAllTime: boolean;
-  isSingleProj: boolean;
-  scopeLabel: string;
-  summary: { eur: number; count: number };
-  activeCount: number;
-  linksTotal: number;
-  linksInScope: number;
-  monthsTrackedAllTime: number;
-}): { eyebrow: string; title: string; lede: string } {
-  const eyebrow = `BRIEFING · ${scopeLabel.toUpperCase()}${
-    isSingleProj && order !== null ? ` · ${order.toUpperCase()}` : ''
-  }`;
-
-  const title = isSingleProj && order !== null
-    ? isAllTime
-      ? `${order} — all time`
-      : `${order} — ${scopeLabel}`
-    : isAllTime
-      ? 'All time in review'
-      : year !== 'all' && month !== 'all'
-        ? `${scopeLabel} in review`
-        : `${year} in review`;
-
-  const lede = isSingleProj && order !== null
-    ? isAllTime
-      ? `${order} contributed ${fmtNum(linksTotal)} links and ${fmtEur(summary.eur)} of spend across ${fmtNum(monthsTrackedAllTime)} months.`
-      : `${order} contributed ${fmtNum(linksInScope)} links and ${fmtEur(summary.eur)} in ${scopeLabel}.`
-    : isAllTime
-      ? `Across ${fmtNum(monthsTrackedAllTime)} months you completed ${fmtNum(linksInScope)} links and spent ${fmtEur(summary.eur)} across ${fmtNum(activeCount)} active projects.`
-      : `In ${scopeLabel} you completed ${fmtNum(linksInScope)} links and spent ${fmtEur(summary.eur)} across ${fmtNum(activeCount)} projects.`;
-
-  return { eyebrow, title, lede };
 }
 
 /* ----------------------------------------------------------------------- */
@@ -633,4 +597,3 @@ function WebsitesContent({
     </>
   );
 }
-

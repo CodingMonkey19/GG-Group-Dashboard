@@ -19,7 +19,7 @@ function row(
     tab_name: 'Clean Data', tab_name_raw: 'Clean Data', row_index: 2,
     work_status: 'Done', is_done: true, payment_status: 'paid', invoice_type: 'text',
     artifact_ref: 'receipt', artifact_status: 'not_attempted', artifact_unreachable_reason: null,
-    website: null, website_raw: null, native_amount: spend, native_currency: 'EUR',
+    website: null, website_raw: null, live_url: null, native_amount: spend, native_currency: 'EUR',
     eur_amount: Math.round(spend * 100) / 100, savings_eur: savings, ecb_rate: 1,
     ecb_rate_as_of: invoice_date, conversion_status: 'converted', invoice_date,
     invoice_month: invoice_date.slice(0, 7), date_source: 'sheet', audit_flags: [],
