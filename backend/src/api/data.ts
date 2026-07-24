@@ -13,10 +13,16 @@
 
 import { existsSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
-import { openStore, storeHasAnyRow } from '../pipeline/store/db.js';
 import {
+  openStore,
+  readSnapshotMetadata,
+  snapshotInvoicesAreCompatible,
+} from '../pipeline/store/db.js';
+import {
+  API_SCHEMA_VERSION,
   AUDIT_CATEGORIES_ALL,
-  type ApiDataResponse,
+  ApiDataResponse,
+  type ApiDataResponse as ApiDataResponseT,
   type AuditCategory,
   type AuditFinding,
   type InvoiceRow,
@@ -54,6 +60,7 @@ interface InvoiceDbRow {
   native_amount: number | null;
   native_currency: string | null;
   eur_amount: number | null;
+  savings_eur: number;
   ecb_rate: number | null;
   ecb_rate_as_of: string | null;
   conversion_status:
@@ -62,8 +69,8 @@ interface InvoiceDbRow {
     | 'unparseable_amount'
     | 'missing_currency'
     | 'out_of_ecb_currency';
-  invoice_date: string | null;
-  invoice_month: string | null;
+  invoice_date: string;
+  invoice_month: string;
   date_source: 'sheet' | 'artifact' | 'undated';
   audit_flags: string;
 }
@@ -79,16 +86,29 @@ interface AuditFindingDbRow {
 }
 
 /**
- * Build the ApiDataResponse envelope from a path to the consolidated store.
- * Returns null when the store doesn't exist yet OR exists but has no rows
- * (the never-refreshed and first-ever-all-failed cases per FR-020a +
- * api-data.md).
+ * The API is intentionally all-or-nothing: a store is ready only after its
+ * v2 metadata and every invoice pass the 2026 boundary. No query filters a
+ * bad row out and returns the remainder as a seemingly valid snapshot.
  */
-export function buildDataResponse(storePath: string): ApiDataResponse | null {
-  if (!existsSync(storePath)) return null;
-  const db = openStore(storePath);
+export type SnapshotReadResult =
+  | { kind: 'ready'; data: ApiDataResponseT }
+  | { kind: 'missing' }
+  | { kind: 'incompatible' };
+
+export function readSnapshot(storePath: string): SnapshotReadResult {
+  if (!existsSync(storePath)) return { kind: 'missing' };
+
+  let db: ReturnType<typeof openStore> | undefined;
   try {
-    if (!storeHasAnyRow(db)) return null;
+    db = openStore(storePath);
+  } catch {
+    return { kind: 'incompatible' };
+  }
+
+  try {
+    if (readSnapshotMetadata(db) === null || !snapshotInvoicesAreCompatible(db)) {
+      return { kind: 'incompatible' };
+    }
 
     const refresh = db
       .prepare(
@@ -108,7 +128,12 @@ export function buildDataResponse(storePath: string): ApiDataResponse | null {
       .filter((s) => s.status === 'failure')
       .map((s) => s.order_code);
 
-    const invoiceRows = db.prepare('SELECT * FROM invoices').all() as InvoiceDbRow[];
+    const invoiceRows = db.prepare(
+      `SELECT * FROM invoices
+        WHERE invoice_date >= '2026-01-01'
+          AND invoice_date < '2027-01-01'
+          AND invoice_month = substr(invoice_date, 1, 7)`,
+    ).all() as InvoiceDbRow[];
     const invoices: InvoiceRow[] = invoiceRows.map(toInvoiceRow);
 
     const findingsRows = db
@@ -146,8 +171,9 @@ export function buildDataResponse(storePath: string): ApiDataResponse | null {
         ? ('never_refreshed' as const)
         : (refresh.status === 'in_progress' ? 'failed' : refresh.status);
 
-    return {
-      schema_version: 1,
+    const envelope = {
+      schema_version: API_SCHEMA_VERSION,
+      reporting_year: 2026 as const,
       last_refreshed_at: refresh?.completed_at ?? null,
       refresh_status,
       duration_ms: refresh?.duration_ms ?? null,
@@ -157,8 +183,11 @@ export function buildDataResponse(storePath: string): ApiDataResponse | null {
       invoices,
       audit_findings_by_category,
     };
+    return { kind: 'ready', data: ApiDataResponse.parse(envelope) };
+  } catch {
+    return { kind: 'incompatible' };
   } finally {
-    db.close();
+    db?.close();
   }
 }
 
@@ -183,6 +212,7 @@ function toInvoiceRow(r: InvoiceDbRow): InvoiceRow {
     native_amount: r.native_amount,
     native_currency: r.native_currency,
     eur_amount: r.eur_amount,
+    savings_eur: r.savings_eur,
     ecb_rate: r.ecb_rate,
     ecb_rate_as_of: r.ecb_rate_as_of,
     conversion_status: r.conversion_status,
@@ -242,11 +272,15 @@ export function registerDataRoute(app: FastifyInstance): void {
       return { error: 'data_dir_not_configured' };
     }
     const storePath = `${dataDir.replace(/\/$/, '')}/consolidated.sqlite`;
-    const response = buildDataResponse(storePath);
-    if (response === null) {
+    const snapshot = readSnapshot(storePath);
+    if (snapshot.kind === 'missing') {
       reply.code(503);
       return { error: 'never_refreshed' };
     }
-    return response;
+    if (snapshot.kind === 'incompatible') {
+      reply.code(503);
+      return { error: 'incompatible_snapshot' };
+    }
+    return snapshot.data;
   });
 }

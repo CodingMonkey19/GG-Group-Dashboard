@@ -1,11 +1,9 @@
 /**
  * T073 follow-up — v_website_current_price view correctness.
  *
- * Regression test for QA review H1: the previous INNER-JOIN form of the
- * view silently dropped websites that had only undated invoices. The fix
- * uses LEFT JOIN so undated-only websites surface with all i.* columns
- * NULL, which the API/UI renders as "unknown" per FR-014 / US4 acceptance
- * scenario 2.
+ * Regression test for QA review H1. v2 snapshots reject undated invoices at
+ * the store boundary, while dated rows retain the selector's tie and status
+ * behavior.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -44,14 +42,14 @@ function insertInvoice(
       source_row_key, invoice_id, order_code, spreadsheet_id, tab_name,
       tab_name_raw, row_index, work_status, is_done, payment_status,
       invoice_type, artifact_ref, artifact_status, website, website_raw,
-      native_amount, native_currency, eur_amount, ecb_rate, ecb_rate_as_of,
+       native_amount, native_currency, eur_amount, savings_eur, ecb_rate, ecb_rate_as_of,
       conversion_status, invoice_date, invoice_month, date_source,
       audit_flags, ingested_at
     ) VALUES (
       @source_row_key, NULL, 'CGLT', 'sheet-1', 'April 2026',
       'April 2026', @row_index, 'Done', @is_done, 'paid',
       'pdf', NULL, 'not_attempted', @website, @website,
-      @native_amount, @native_currency, @eur_amount, 1.0, '2026-04-01',
+      @native_amount, @native_currency, @eur_amount, 0, 1.0, '2026-04-01',
       @conversion_status, @invoice_date,
       CASE WHEN @invoice_date IS NULL THEN NULL ELSE substr(@invoice_date, 1, 7) END,
       CASE WHEN @invoice_date IS NULL THEN 'undated' ELSE 'sheet' END,
@@ -71,7 +69,7 @@ function insertInvoice(
   });
 }
 
-describe('v_website_current_price view (H1 regression — undated-only websites surface)', () => {
+describe('v_website_current_price view (v2 snapshot dates)', () => {
   let dir: string;
   let dbPath: string;
   let db: DatabaseT;
@@ -110,21 +108,14 @@ describe('v_website_current_price view (H1 regression — undated-only websites 
     expect(rows[0]!.eur_amount).toBe(200);
   });
 
-  it('surfaces an undated-only website with all i.* columns NULL (FR-014 unknown)', () => {
-    insertInvoice(db, {
+  it('rejects an undated invoice before it can reach the view', () => {
+    expect(() => insertInvoice(db, {
       source_row_key: '0000000000000010',
       website: 'undated-only.com',
       invoice_date: null,
       row_index: 5,
       eur_amount: 50,
-    });
-
-    const rows = db.prepare('SELECT * FROM v_website_current_price ORDER BY website').all() as ViewRow[];
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.website).toBe('undated-only.com');
-    expect(rows[0]!.invoice_date).toBeNull();
-    expect(rows[0]!.eur_amount).toBeNull();
-    expect(rows[0]!.source_row_key).toBeNull();
+    })).toThrow(/NOT NULL constraint failed/);
   });
 
   it('emits all tied max-date rows per website (selector resolves the winner)', () => {

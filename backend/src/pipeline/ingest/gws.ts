@@ -24,6 +24,11 @@ export interface RawRow {
   cells: string[];
 }
 
+export interface PullSheetOptions {
+  /** Google Sheets rendering mode for a range read. */
+  valueRenderOption?: 'FORMATTED_VALUE' | 'UNFORMATTED_VALUE';
+}
+
 export interface DriveFileMetadata {
   id: string;
   name: string;
@@ -66,7 +71,12 @@ export interface GwsWrapper {
    * Optional efficient range read for callers that only need part of a tab.
    * `a1Range` is relative to the tab, e.g. "A1:O1".
    */
-  pullSheetRange?(spreadsheetId: string, tab: string, a1Range: string): Promise<RawRow[]>;
+  pullSheetRange?(
+    spreadsheetId: string,
+    tab: string,
+    a1Range: string,
+    options?: PullSheetOptions,
+  ): Promise<RawRow[]>;
 
   /**
    * Optional efficient batch header read. Returns tab name → A1:O1 rows.

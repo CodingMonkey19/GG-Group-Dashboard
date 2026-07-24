@@ -53,6 +53,7 @@ function row(partial: Partial<NormalizedRow>): NormalizedRow {
     native_amount: 100,
     native_currency: 'EUR',
     eur_amount: 100,
+    savings_eur: 0,
     ecb_rate: 1,
     ecb_rate_as_of: '2026-04-01',
     conversion_status: 'converted',
@@ -164,18 +165,23 @@ describe('T089 — empty-category zero-count contract (FR-022)', () => {
          VALUES ('2026-04-01T00:00:00Z', '2026-04-01T00:00:01Z', 1000, 'success', 'manual', '[]', @counters)`,
       ).run({ counters });
       db.prepare(
+        `INSERT INTO snapshot_metadata (
+           singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
+         ) VALUES (1, 2, 2026, 'REPORT_2026', 'Clean Data')`,
+      ).run();
+      db.prepare(
         `INSERT INTO invoices (
            source_row_key, invoice_id, order_code, spreadsheet_id, tab_name,
            tab_name_raw, row_index, work_status, is_done, payment_status,
            invoice_type, artifact_ref, artifact_status, website, website_raw,
-           native_amount, native_currency, eur_amount, ecb_rate, ecb_rate_as_of,
+           native_amount, native_currency, eur_amount, savings_eur, ecb_rate, ecb_rate_as_of,
            conversion_status, invoice_date, invoice_month, date_source,
            audit_flags, ingested_at
          ) VALUES (
            '0000000000c1ea11', NULL, 'CGLT', 's1', 'April 2026',
            'April 2026', 2, 'Done', 1, 'paid',
            'pdf', 'inv.pdf', 'reachable', 'a.com', 'a.com',
-           100, 'EUR', 100, 1.0, '2026-04-01',
+           100, 'EUR', 100, 0, 1.0, '2026-04-01',
            'converted', '2026-04-01', '2026-04', 'sheet',
            '[]', '2026-04-01T00:00:00Z'
          )`,

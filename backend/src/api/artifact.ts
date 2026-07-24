@@ -31,7 +31,11 @@ import { isAbsolute, normalize, relative, resolve, sep } from 'node:path';
 import type { Database as DatabaseT } from 'better-sqlite3';
 import { GwsAuthError, GwsNotFoundError, type GwsWrapper } from '../pipeline/ingest/gws.js';
 import { GwsSubprocess } from '../pipeline/ingest/gws-subprocess.js';
-import { openStore } from '../pipeline/store/db.js';
+import {
+  openStore,
+  readSnapshotMetadata,
+  snapshotInvoicesAreCompatible,
+} from '../pipeline/store/db.js';
 import { logger } from '../shared/logger.js';
 import { sanitizeErrorMessage } from '../shared/sanitize.js';
 import type { InvoiceType } from '../shared/contracts.js';
@@ -72,12 +76,26 @@ export function registerArtifactRoute(app: FastifyInstance): void {
     let db: DatabaseT | undefined;
     try {
       db = openStore(livePath);
+      // Check the entire snapshot before looking up an artifact key. A valid
+      // metadata row is not enough if a manual mutation introduced a legacy,
+      // malformed, or mixed-year invoice alongside it.
+      if (readSnapshotMetadata(db) === null || !snapshotInvoicesAreCompatible(db)) {
+        reply.code(503);
+        return { error: 'incompatible_snapshot' };
+      }
       row = db
         .prepare(
           `SELECT source_row_key, invoice_type, artifact_ref, order_code, row_index
-             FROM invoices WHERE source_row_key = ?`,
+             FROM invoices
+            WHERE source_row_key = ?
+              AND invoice_date >= '2026-01-01'
+              AND invoice_date < '2027-01-01'
+              AND invoice_month = substr(invoice_date, 1, 7)`,
         )
         .get(key) as ArtifactRow | undefined;
+    } catch {
+      reply.code(503);
+      return { error: 'incompatible_snapshot' };
     } finally {
       try {
         db?.close();

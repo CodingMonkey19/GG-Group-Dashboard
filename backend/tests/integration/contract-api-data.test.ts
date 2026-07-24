@@ -118,7 +118,8 @@ describe('GET /api/data contract (T040)', () => {
       if (!parsed.success) return;
 
       const data = parsed.data;
-      expect(data.schema_version).toBe(1);
+      expect(data.schema_version).toBe(2);
+      expect(data.reporting_year).toBe(2026);
       expect(data.refresh_status).toBe('success');
       expect(Array.isArray(data.excluded_order_codes)).toBe(true);
       expect(data.excluded_order_codes).toEqual([]);
@@ -137,6 +138,9 @@ describe('GET /api/data contract (T040)', () => {
       // Every InvoiceRow has a 16-char hex source_row_key.
       for (const row of data.invoices) {
         expect(row.source_row_key).toMatch(/^[0-9a-f]{16}$/);
+        expect(row.invoice_date.startsWith('2026-')).toBe(true);
+        expect(row.invoice_month.startsWith('2026-')).toBe(true);
+        expect(Number.isFinite(row.savings_eur)).toBe(true);
       }
     } finally {
       await app.close();

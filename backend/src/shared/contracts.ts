@@ -144,26 +144,66 @@ export const FolderSourceConfig = z
   .strict();
 export type FolderSourceConfig = z.infer<typeof FolderSourceConfig>;
 
+export const REPORTING_YEAR = 2026 as const;
+/** Version of the published, 2026-only API/store snapshot contract. */
+export const API_SCHEMA_VERSION = 2 as const;
+
+export const ReportSourceHeaderMapping = z
+  .object({
+    order: z.string().min(1),
+    source_tab: z.string().min(1),
+    source_row: z.string().min(1),
+    invoice_date: z.string().min(1),
+    reporting_month: z.string().min(1),
+    link_builder: z.string().min(1),
+    website: z.string().min(1),
+    spend_eur: z.string().min(1),
+    invoice_url: z.string().min(1),
+    live_url: z.string().min(1),
+    invoice_status: z.string().min(1),
+    included: z.string().min(1),
+    data_quality_issue: z.string().min(1),
+    savings_eur: z.string().min(1),
+  })
+  .strict();
+export type ReportSourceHeaderMapping = z.infer<typeof ReportSourceHeaderMapping>;
+
+export const ReportSourceConfig = z
+  .object({
+    spreadsheet_id: z.string().min(1),
+    data_tab: z.string().min(1),
+    monthly_summary_tab: z.string().min(1),
+    order_summary_tab: z.string().min(1),
+    reporting_year: z.literal(REPORTING_YEAR),
+    headers: ReportSourceHeaderMapping,
+  })
+  .strict();
+export type ReportSourceConfig = z.infer<typeof ReportSourceConfig>;
+
 export const SheetsConfig = z
   .object({
     schema_version: z.literal(1),
     /** Map canonical tab name → known misspelled variant the sheet actually uses. */
     tab_aliases: z.record(z.string().min(1), z.string().min(1)).optional(),
+    report_source: ReportSourceConfig.optional(),
     folder_source: FolderSourceConfig.optional(),
     /**
      * Legacy/static source mode kept for deterministic tests and one-off
-     * fixtures. Production config should use folder_source so original
+     * fixtures. Production config should use report_source so original
      * spreadsheet IDs never become the dashboard source of truth again.
      */
     sheets: z.array(SheetEntry).optional().default([]),
   })
   .strict()
   .superRefine((cfg, ctx) => {
-    if (cfg.folder_source === undefined && cfg.sheets.length === 0) {
+    const sourceModeCount = Number(cfg.report_source !== undefined)
+      + Number(cfg.folder_source !== undefined)
+      + Number(cfg.sheets.length > 0);
+    if (sourceModeCount !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['sheets'],
-        message: 'Either folder_source or at least one static sheet entry is required.',
+        path: [],
+        message: 'Exactly one source mode is required: report_source, folder_source, or non-empty sheets.',
       });
     }
     const seen = new Set<string>();
@@ -223,12 +263,14 @@ export const InvoiceRow = z
     native_amount: z.number().nullable(),
     native_currency: z.string().min(3).max(3).nullable(),
     eur_amount: z.number().nullable(),
+    /** Raw EUR savings supplied by the source report; always finite in a v2 snapshot. */
+    savings_eur: z.number().finite(),
     /** ECB-native: foreign currency units per 1 EUR. EUR rows store rate=1.0. */
     ecb_rate: z.number().positive().nullable(),
     ecb_rate_as_of: IsoDate.nullable(),
     conversion_status: ConversionStatus,
-    invoice_date: IsoDate.nullable(),
-    invoice_month: IsoMonth.nullable(),
+    invoice_date: IsoDate,
+    invoice_month: IsoMonth,
     date_source: DateSource,
     audit_flags: z.array(z.string()),
   })
@@ -309,7 +351,8 @@ const AuditByCategoryShape = z
 
 export const ApiDataResponse = z
   .object({
-    schema_version: z.literal(1),
+    schema_version: z.literal(API_SCHEMA_VERSION),
+    reporting_year: z.literal(REPORTING_YEAR),
     last_refreshed_at: Iso8601Utc.nullable(),
     refresh_status: z.enum(['success', 'partial', 'failed', 'never_refreshed']),
     duration_ms: z.number().int().nonnegative().nullable(),
@@ -322,7 +365,26 @@ export const ApiDataResponse = z
     /** Every category key MUST be present (FR-022); value MAY be []. */
     audit_findings_by_category: AuditByCategoryShape,
   })
-  .strict();
+  .strict()
+  .superRefine((response, ctx) => {
+    for (let index = 0; index < response.invoices.length; index += 1) {
+      const invoice = response.invoices[index]!;
+      if (!invoice.invoice_date.startsWith(`${REPORTING_YEAR}-`)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['invoices', index, 'invoice_date'],
+          message: `invoice_date must be within ${REPORTING_YEAR}`,
+        });
+      }
+      if (!invoice.invoice_month.startsWith(`${REPORTING_YEAR}-`)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['invoices', index, 'invoice_month'],
+          message: `invoice_month must be within ${REPORTING_YEAR}`,
+        });
+      }
+    }
+  });
 export type ApiDataResponse = z.infer<typeof ApiDataResponse>;
 
 /* ----------------------------------------------------------------------- */

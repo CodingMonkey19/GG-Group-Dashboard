@@ -17,64 +17,69 @@ import type {
   PaymentStatus,
 } from './contracts';
 
+const REPORTING_YEAR_START = '2026-01-01';
+const REPORTING_YEAR_END = '2027-01-01';
+const REPORTING_MONTH_PREFIX = '2026-';
+
 export interface PaymentStatusBreakdown {
-  paid: { eur: number; count: number };
-  unpaid: { eur: number; count: number };
-  unknown: { eur: number; count: number };
-  missing: { eur: number; count: number };
+  paid: { spend_eur: number; count: number };
+  unpaid: { spend_eur: number; count: number };
+  unknown: { spend_eur: number; count: number };
+  missing: { spend_eur: number; count: number };
 }
 
 export interface ScopedTotal {
-  /** EUR sum across all aggregable rows in the scope. */
-  eur: number;
+  /** EUR spend across all aggregable rows in the scope. */
+  spend_eur: number;
+  /** EUR savings across all aggregable rows in the scope. */
+  savings_eur: number;
   /** Number of aggregable rows in the scope. */
   count: number;
-  /** Per-payment-status breakdown of `eur` and `count` (sums to the scope). */
+  /** Per-payment-status spend and row count (sums to the scope). */
   by_status: PaymentStatusBreakdown;
-  /**
-   * Number of aggregable rows in the scope whose date is `Undated`.
-   * Always <= count. Surfaced in the UI alongside the headline whenever
-   * undated_count > 0 and the scope isn't itself the `Undated` bucket
-   * (User Story 3 acceptance scenario 2 — "the count of undated rows is
-   * visible alongside the figure" for lifetime views).
-   */
-  undated_count: number;
 }
 
-/** Predicate: is this row aggregable for headline EUR sums? */
+/** True only for rows inside the dashboard's fixed 2026 reporting boundary. */
+export function isReportingYearRow(row: InvoiceRow): boolean {
+  return (
+    row.invoice_date >= REPORTING_YEAR_START
+    && row.invoice_date < REPORTING_YEAR_END
+    && row.invoice_month.startsWith(REPORTING_MONTH_PREFIX)
+  );
+}
+
+/** Predicate: is this 2026 row aggregable for headline EUR sums? */
 export function isAggregable(row: InvoiceRow): boolean {
-  return row.is_done && row.conversion_status === 'converted';
+  return isReportingYearRow(row) && row.is_done && row.conversion_status === 'converted';
 }
 
 function emptyBreakdown(): PaymentStatusBreakdown {
   return {
-    paid: { eur: 0, count: 0 },
-    unpaid: { eur: 0, count: 0 },
-    unknown: { eur: 0, count: 0 },
-    missing: { eur: 0, count: 0 },
+    paid: { spend_eur: 0, count: 0 },
+    unpaid: { spend_eur: 0, count: 0 },
+    unknown: { spend_eur: 0, count: 0 },
+    missing: { spend_eur: 0, count: 0 },
   };
 }
 
 function emptyTotal(): ScopedTotal {
-  return { eur: 0, count: 0, by_status: emptyBreakdown(), undated_count: 0 };
+  return { spend_eur: 0, savings_eur: 0, count: 0, by_status: emptyBreakdown() };
 }
 
 function addRow(total: ScopedTotal, row: InvoiceRow): void {
-  const eur = row.eur_amount ?? 0;
-  total.eur += eur;
+  const spend = row.eur_amount ?? 0;
+  total.spend_eur += spend;
+  total.savings_eur += row.savings_eur;
   total.count += 1;
   const bucket = total.by_status[row.payment_status];
-  bucket.eur += eur;
+  bucket.spend_eur += spend;
   bucket.count += 1;
-  if (row.date_source === 'undated') {
-    total.undated_count += 1;
-  }
 }
 
 /**
  * Round EUR amounts to cents on the way out so display is deterministic.
  *
- * QA review H16: previously `total.eur` and each status total were rounded
+ * QA review H16: the status totals are rounded before the spend headline
  * INDEPENDENTLY, which means `round(sum) !== sum(round(parts))` in the
  * general case — the headline could be 1 cent off from the displayed
  * paid/unpaid/unknown/missing total below it. Fix: round each status,
@@ -84,13 +89,14 @@ function addRow(total: ScopedTotal, row: InvoiceRow): void {
 function roundCents(total: ScopedTotal): ScopedTotal {
   let headlineSum = 0;
   for (const status of ['paid', 'unpaid', 'unknown', 'missing'] satisfies PaymentStatus[]) {
-    const rounded = Math.round(total.by_status[status].eur * 100) / 100;
-    total.by_status[status].eur = rounded;
+    const rounded = Math.round(total.by_status[status].spend_eur * 100) / 100;
+    total.by_status[status].spend_eur = rounded;
     headlineSum += rounded;
   }
   // Re-round once after the additive accumulation so float-summation noise
   // can't push us off the cent boundary again.
-  total.eur = Math.round(headlineSum * 100) / 100;
+  total.spend_eur = Math.round(headlineSum * 100) / 100;
+  total.savings_eur = Math.round(total.savings_eur * 100) / 100;
   return total;
 }
 
@@ -139,7 +145,7 @@ export function orderMonthTotal(
 /**
  * Lifetime (all-months) sum for a given order_code.
  */
-export function lifetimePerOrder(data: ApiDataResponse, orderCode: string): ScopedTotal {
+export function reportingYearPerOrder(data: ApiDataResponse, orderCode: string): ScopedTotal {
   const total = emptyTotal();
   for (const row of data.invoices) {
     if (!isAggregable(row)) continue;
@@ -156,7 +162,7 @@ export function lifetimePerOrder(data: ApiDataResponse, orderCode: string): Scop
  * Includes every aggregable row (is_done && conversion_status='converted'),
  * including those bucketed as `Undated`.
  */
-export function lifetimeTotal(data: ApiDataResponse): ScopedTotal {
+export function reportingYearTotal(data: ApiDataResponse): ScopedTotal {
   const total = emptyTotal();
   for (const row of data.invoices) {
     if (!isAggregable(row)) continue;
@@ -210,7 +216,7 @@ export function rowsDonePerMonth(data: ApiDataResponse): number[] {
   const byMonth = new Map<string, number>();
 
   for (const row of data.invoices) {
-    if (!row.is_done) continue;
+    if (!isReportingYearRow(row) || !row.is_done) continue;
     if (row.invoice_month === null) continue;
     byMonth.set(row.invoice_month, (byMonth.get(row.invoice_month) ?? 0) + 1);
   }
@@ -271,8 +277,8 @@ export interface WebsiteCurrentPrice {
    */
   current_price_payment_status: PaymentStatus | null;
   /**
-   * Column-L live URL (the actual published article URL) of the chosen
-   * current-price row. Null when the row had no live_url cell or when
+   * Published article URL from the chosen current-price row. Null when
+   * the row had no live_url cell or when
    * the website has only undated invoices.
    */
   current_price_live_url: string | null;
@@ -303,7 +309,7 @@ export function websiteCurrentPrices(
   today: string = NO_FUTURE_FILTER,
   minRowsPerYear: number = 0,
   /**
-   * When true, drop rows whose `live_url` (column L) is empty so the view
+   * When true, drop rows whose `live_url` field is empty so the view
    * doesn't fall back to showing a bare publisher domain (which looks like
    * a homepage to the operator). Production passes true; legacy tests
    * with pre-`live_url` fixtures default to false so they keep passing.
@@ -413,7 +419,7 @@ export function drillRowsForScope(
 ): InvoiceRow[] {
   const out: InvoiceRow[] = [];
   for (const row of data.invoices) {
-    if (!row.is_done) continue;
+    if (!isReportingYearRow(row) || !row.is_done) continue;
     if (orderCode !== null && row.order_code !== orderCode) continue;
     if (monthBucket !== null) {
       const rowMonth = row.invoice_month ?? 'Undated';
@@ -447,7 +453,7 @@ export function drillRowsForWebsite(
   const noise = getNoiseYears(data, today, minRowsPerYear);
   const out: InvoiceRow[] = [];
   for (const row of data.invoices) {
-    if (!row.is_done) continue;
+    if (!isReportingYearRow(row) || !row.is_done) continue;
     if (!isNotFutureDated(row, today)) continue;
     if (!isVisibleYear(row, noise)) continue;
     if (row.website !== website) continue;
@@ -587,6 +593,7 @@ export function distinctMonths(data: ApiDataResponse): string[] {
 export function distinctOrderCodes(data: ApiDataResponse): string[] {
   const set = new Set<string>();
   for (const row of data.invoices) {
+    if (!isReportingYearRow(row)) continue;
     set.add(row.order_code);
   }
   return Array.from(set).sort();
@@ -613,7 +620,9 @@ export interface SpendScope {
 
 export interface ScopedSummary {
   eur: number;
+  savings_eur: number;
   count: number;
+  by_status: PaymentStatusBreakdown;
 }
 
 /**
@@ -742,14 +751,28 @@ export function spendInScope(
   minRowsPerYear: number = 0,
 ): ScopedSummary {
   const noise = getNoiseYears(data, today, minRowsPerYear);
-  let eur = 0;
+  const byStatus = emptyBreakdown();
+  let savingsEur = 0;
   let count = 0;
   for (const row of data.invoices) {
     if (!isAggregableInScope(row, scope, today, noise)) continue;
-    eur += row.eur_amount ?? 0;
+    const spend = row.eur_amount ?? 0;
+    byStatus[row.payment_status].spend_eur += spend;
+    byStatus[row.payment_status].count += 1;
+    savingsEur += row.savings_eur;
     count += 1;
   }
-  return { eur: roundCurrency(eur), count };
+  let eur = 0;
+  for (const status of ['paid', 'unpaid', 'unknown', 'missing'] satisfies PaymentStatus[]) {
+    byStatus[status].spend_eur = roundCurrency(byStatus[status].spend_eur);
+    eur += byStatus[status].spend_eur;
+  }
+  return {
+    eur: roundCurrency(eur),
+    savings_eur: roundCurrency(savingsEur),
+    count,
+    by_status: byStatus,
+  };
 }
 
 /**
@@ -830,7 +853,7 @@ export function rowsDoneSeries(
   const noise = getNoiseYears(data, today, minRowsPerYear);
   const byMonth = new Map<string, number>();
   for (const row of data.invoices) {
-    if (!row.is_done) continue;
+    if (!isReportingYearRow(row) || !row.is_done) continue;
     if (row.invoice_month === null) continue;
     if (!isNotFutureDated(row, today)) continue;
     if (!isVisibleYear(row, noise)) continue;
@@ -910,7 +933,7 @@ export function lifetimeRowsDoneFor(
   const noise = getNoiseYears(data, today, minRowsPerYear);
   let n = 0;
   for (const row of data.invoices) {
-    if (!row.is_done) continue;
+    if (!isReportingYearRow(row) || !row.is_done) continue;
     if (row.order_code !== code) continue;
     if (!isNotFutureDated(row, today)) continue;
     if (!isVisibleYear(row, noise)) continue;

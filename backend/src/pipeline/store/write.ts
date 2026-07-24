@@ -22,6 +22,12 @@ import type {
   RefreshCounters,
   RefreshStatus,
 } from '../../shared/contracts.js';
+import { API_SCHEMA_VERSION, REPORTING_YEAR } from '../../shared/contracts.js';
+
+export interface SnapshotMetadataInput {
+  source_spreadsheet_id: string;
+  source_tab: string;
+}
 
 export interface WriteRefreshEventInput {
   /**
@@ -36,6 +42,7 @@ export interface WriteRefreshEventInput {
   status: RefreshStatus;
   per_source: PerSourceStatus[];
   counters: RefreshCounters;
+  snapshot_metadata: SnapshotMetadataInput;
 }
 
 export interface WriteResult {
@@ -79,6 +86,8 @@ export function writeConsolidation(
   findings: readonly AuditFindingDraft[],
   refreshEvent: WriteRefreshEventInput,
 ): WriteResult {
+  assertSnapshotWriteInput(rows, refreshEvent.snapshot_metadata);
+
   // INSERT OR IGNORE so a UNIQUE collision on source_row_key (64-bit hash
   // truncation; vanishingly unlikely but possible, or duplicate-tab operator
   // mistake) does not abort the entire refresh transaction. The deterministic
@@ -92,7 +101,7 @@ export function writeConsolidation(
       tab_name_raw, row_index, work_status, is_done, payment_status,
       invoice_type, artifact_ref, artifact_status, website, website_raw,
       live_url,
-      native_amount, native_currency, eur_amount, ecb_rate, ecb_rate_as_of,
+      native_amount, native_currency, eur_amount, savings_eur, ecb_rate, ecb_rate_as_of,
       conversion_status, invoice_date, invoice_month, date_source,
       audit_flags, ingested_at
     ) VALUES (
@@ -100,7 +109,7 @@ export function writeConsolidation(
       @tab_name_raw, @row_index, @work_status, @is_done, @payment_status,
       @invoice_type, @artifact_ref, @artifact_status, @website, @website_raw,
       @live_url,
-      @native_amount, @native_currency, @eur_amount, @ecb_rate, @ecb_rate_as_of,
+      @native_amount, @native_currency, @eur_amount, @savings_eur, @ecb_rate, @ecb_rate_as_of,
       @conversion_status, @invoice_date, @invoice_month, @date_source,
       @audit_flags, @ingested_at
     )
@@ -124,10 +133,27 @@ export function writeConsolidation(
     )
   `);
 
+  const insertSnapshotMetadata = db.prepare(`
+    INSERT INTO snapshot_metadata (
+      singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
+    ) VALUES (
+      1, @schema_version, @reporting_year, @source_spreadsheet_id, @source_tab
+    )
+  `);
+
   const ingestedAt = new Date().toISOString();
 
   const tx = db.transaction(() => {
-    // 1. invoices
+    // 1. Snapshot identity. This is deliberately committed with all data so
+    // API readers never treat a half-written/legacy file as refresh-ready.
+    insertSnapshotMetadata.run({
+      schema_version: API_SCHEMA_VERSION,
+      reporting_year: REPORTING_YEAR,
+      source_spreadsheet_id: refreshEvent.snapshot_metadata.source_spreadsheet_id,
+      source_tab: refreshEvent.snapshot_metadata.source_tab,
+    });
+
+    // 2. invoices
     let invoiceCount = 0;
     let skippedDuplicates = 0;
     for (const row of rows) {
@@ -151,6 +177,7 @@ export function writeConsolidation(
         native_amount: row.native_amount,
         native_currency: row.native_currency,
         eur_amount: row.eur_amount,
+        savings_eur: row.savings_eur,
         ecb_rate: row.ecb_rate,
         ecb_rate_as_of: row.ecb_rate_as_of,
         conversion_status: row.conversion_status,
@@ -180,7 +207,7 @@ export function writeConsolidation(
       );
     }
 
-    // 2. refresh_events — UPDATE the row allocated up front by
+    // 3. refresh_events — UPDATE the row allocated up front by
     //    allocateRefreshEvent() so every SSE event already emitted in this
     //    refresh carries the canonical id.
     const updateResult = updateRefresh.run({
@@ -199,7 +226,7 @@ export function writeConsolidation(
     }
     const refresh_id = refreshEvent.refresh_id;
 
-    // 3. audit_findings (FK to the refresh row + source_row_key on invoices)
+    // 4. audit_findings (FK to the refresh row + source_row_key on invoices)
     let findingCount = 0;
     for (const f of findings) {
       insertFinding.run({
@@ -216,4 +243,32 @@ export function writeConsolidation(
   });
 
   return tx();
+}
+
+/** Fail before the transaction can issue any invoice insert. */
+function assertSnapshotWriteInput(
+  rows: readonly NormalizedRow[],
+  metadata: SnapshotMetadataInput,
+): void {
+  if (metadata.source_spreadsheet_id.trim() === '' || metadata.source_tab.trim() === '') {
+    throw new Error('writeConsolidation: snapshot metadata source fields must be nonempty');
+  }
+
+  for (const row of rows) {
+    if (!Number.isFinite(row.savings_eur)) {
+      throw new Error(`writeConsolidation: ${row.source_row_key} has non-finite savings_eur`);
+    }
+    if (!isValidReportingDate(row.invoice_date)) {
+      throw new Error(`writeConsolidation: ${row.source_row_key} has invalid ${REPORTING_YEAR} invoice_date`);
+    }
+    if (row.invoice_month !== row.invoice_date.slice(0, 7)) {
+      throw new Error(`writeConsolidation: ${row.source_row_key} invoice_month must match invoice_date`);
+    }
+  }
+}
+
+function isValidReportingDate(value: string | null): value is string {
+  if (typeof value !== 'string' || !/^2026-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

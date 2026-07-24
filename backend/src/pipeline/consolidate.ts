@@ -20,7 +20,7 @@
  * SSE event emission is supported via the optional `onEvent` callback.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Database as DatabaseT } from 'better-sqlite3';
 import { loadSheetsConfig } from '../config/load.js';
@@ -29,13 +29,14 @@ import type {
   RefreshCounters,
   RefreshSseEvent,
   RefreshStatus,
-  SheetEntry,
   SheetsConfig,
 } from '../shared/contracts.js';
 import { logger } from '../shared/logger.js';
 import { GwsError, type GwsWrapper } from './ingest/gws.js';
 import { prepareIngestSources } from './ingest/folder-source.js';
 import { GwsSubprocess } from './ingest/gws-subprocess.js';
+import { readReportSource } from './ingest/report-source.js';
+import { reconcileReportSource } from './ingest/report-reconciliation.js';
 import { adaptSheet } from './ingest/sheet-adapter.js';
 import {
   copyEcbRates,
@@ -44,12 +45,16 @@ import {
   parseAndUpsertEcbHistoricalXml,
   parseAndUpsertEcbXml,
 } from './normalize/ecb-cache.js';
-import { normalizeRow, type NormalizedRow } from './normalize/index.js';
-import { parseDateCell } from './normalize/date-resolution.js';
+import {
+  isDashboardEligibleRow,
+  normalizeRow,
+  type NormalizedRow,
+} from './normalize/index.js';
 import { emitFindings } from './audit/findings.js';
 import { commitStaging } from './store/atomic-replace.js';
 import { openStagingStore, openStore } from './store/db.js';
 import { allocateRefreshEvent, writeConsolidation } from './store/write.js';
+import type { SnapshotMetadataInput } from './store/write.js';
 import { sanitizeErrorMessage } from '../shared/sanitize.js';
 
 export interface RunConsolidationOptions {
@@ -102,77 +107,106 @@ export async function runConsolidation(
   opts.onEvent?.({ event: 'phase', data: { refresh_id, phase: 'ingest' } });
   const perSource: PerSourceStatus[] = [];
   const excludedOrderCodes: string[] = [];
-  const adaptedRowsBySheet: Array<{
-    sheet: SheetEntry;
-    rows: ReturnType<typeof adaptSheet>;
-  }> = [];
-  const preparedSources = await prepareIngestSources(opts.config, opts.gws);
-
-  for (const source of preparedSources) {
-    const sheet = source.sheet;
-    let rowsPulled = 0;
-    const sheetRows: ReturnType<typeof adaptSheet> = [];
-    let sheetFailed = false;
-    let lastErrorMsg: string | undefined = source.failure;
-
-    if (source.failure !== undefined) {
-      sheetFailed = true;
-    } else {
-      for (const tab of source.tabs) {
-        try {
-          const raw = tab.rows ?? await opts.gws.pullSheet(sheet.spreadsheet_id, tab.tabRaw);
-          const adapted = adaptSheet(sheet, tab.tabRaw, opts.config.tab_aliases, raw)
-            .filter(isDashboardEligibleRow);
-          rowsPulled += adapted.length;
-          sheetRows.push(...adapted);
-        } catch (err) {
-          sheetFailed = true;
-          lastErrorMsg = err instanceof Error ? err.message : String(err);
-          // Stop processing this sheet — path A excludes the WHOLE sheet.
-          break;
-        }
+  const adaptedRows: ReturnType<typeof adaptSheet> = [];
+  let reportSummaries:
+    | {
+        monthly: Parameters<typeof reconcileReportSource>[1];
+        orders: Parameters<typeof reconcileReportSource>[2];
       }
+    | undefined;
+
+  if (opts.config.report_source !== undefined) {
+    const report = await readReportSource(opts.config.report_source, opts.gws);
+    const reportRows = report.rows.filter(isDashboardEligibleRow);
+    adaptedRows.push(...reportRows);
+    reportSummaries = { monthly: report.monthlySummary, orders: report.orderSummary };
+    const sourceStatus: PerSourceStatus = {
+      ...report.sourceStatus,
+      rows_pulled: reportRows.length,
+    };
+    perSource.push(sourceStatus);
+    opts.onEvent?.({
+      event: 'source_progress',
+      data: {
+        refresh_id,
+        spreadsheet_id: sourceStatus.spreadsheet_id,
+        order_code: sourceStatus.order_code,
+        status: 'success',
+        rows_pulled: sourceStatus.rows_pulled,
+      },
+    });
+  } else {
+    const preparedSources = await prepareIngestSources(opts.config, opts.gws);
+    if (preparedSources.length === 0) {
+      throw new Error('ingest prepared zero sources; refusing to publish an empty snapshot');
     }
 
-    if (sheetFailed) {
-      const entry: PerSourceStatus = {
-        spreadsheet_id: sheet.spreadsheet_id,
-        order_code: sheet.order_code,
-        status: 'failure',
-        rows_pulled: 0,
-      };
-      if (lastErrorMsg !== undefined) entry.error_msg = lastErrorMsg;
-      perSource.push(entry);
-      excludedOrderCodes.push(sheet.order_code);
-      opts.onEvent?.({
-        event: 'source_progress',
-        data: {
-          refresh_id,
+    for (const source of preparedSources) {
+      const sheet = source.sheet;
+      let rowsPulled = 0;
+      const sheetRows: ReturnType<typeof adaptSheet> = [];
+      let sheetFailed = false;
+      let lastErrorMsg: string | undefined = source.failure;
+
+      if (source.failure !== undefined) {
+        sheetFailed = true;
+      } else {
+        for (const tab of source.tabs) {
+          try {
+            const raw = tab.rows ?? await opts.gws.pullSheet(sheet.spreadsheet_id, tab.tabRaw);
+            const adapted = adaptSheet(sheet, tab.tabRaw, opts.config.tab_aliases, raw)
+              .filter(isDashboardEligibleRow);
+            rowsPulled += adapted.length;
+            sheetRows.push(...adapted);
+          } catch (err) {
+            sheetFailed = true;
+            lastErrorMsg = err instanceof Error ? err.message : String(err);
+            // Stop processing this sheet — path A excludes the WHOLE sheet.
+            break;
+          }
+        }
+      }
+
+      if (sheetFailed) {
+        const entry: PerSourceStatus = {
           spreadsheet_id: sheet.spreadsheet_id,
           order_code: sheet.order_code,
           status: 'failure',
           rows_pulled: 0,
-          error_msg: lastErrorMsg ?? null,
-        },
-      });
-    } else {
-      perSource.push({
-        spreadsheet_id: sheet.spreadsheet_id,
-        order_code: sheet.order_code,
-        status: 'success',
-        rows_pulled: rowsPulled,
-      });
-      adaptedRowsBySheet.push({ sheet, rows: sheetRows });
-      opts.onEvent?.({
-        event: 'source_progress',
-        data: {
-          refresh_id,
+        };
+        if (lastErrorMsg !== undefined) entry.error_msg = lastErrorMsg;
+        perSource.push(entry);
+        excludedOrderCodes.push(sheet.order_code);
+        opts.onEvent?.({
+          event: 'source_progress',
+          data: {
+            refresh_id,
+            spreadsheet_id: sheet.spreadsheet_id,
+            order_code: sheet.order_code,
+            status: 'failure',
+            rows_pulled: 0,
+            error_msg: lastErrorMsg ?? null,
+          },
+        });
+      } else {
+        perSource.push({
           spreadsheet_id: sheet.spreadsheet_id,
           order_code: sheet.order_code,
           status: 'success',
           rows_pulled: rowsPulled,
-        },
-      });
+        });
+        adaptedRows.push(...sheetRows);
+        opts.onEvent?.({
+          event: 'source_progress',
+          data: {
+            refresh_id,
+            spreadsheet_id: sheet.spreadsheet_id,
+            order_code: sheet.order_code,
+            status: 'success',
+            rows_pulled: rowsPulled,
+          },
+        });
+      }
     }
   }
 
@@ -181,15 +215,17 @@ export async function runConsolidation(
   opts.onEvent?.({ event: 'phase', data: { refresh_id, phase: 'normalize' } });
 
   const normalizedRows: NormalizedRow[] = [];
-  for (const { rows } of adaptedRowsBySheet) {
-    for (const adapter of rows) {
-      const normalized = await normalizeRow(adapter, {
-        gws: opts.gws,
-        db: opts.db,
-        pdfRoot: opts.pdfRoot,
-      });
-      normalizedRows.push(normalized);
-    }
+  for (const adapter of adaptedRows) {
+    const normalized = await normalizeRow(adapter, {
+      gws: opts.gws,
+      db: opts.db,
+      pdfRoot: opts.pdfRoot,
+    });
+    normalizedRows.push(normalized);
+  }
+
+  if (reportSummaries !== undefined) {
+    reconcileReportSource(normalizedRows, reportSummaries.monthly, reportSummaries.orders);
   }
 
   // ----- Phase: audit. Aggregate findings across all rows. -----
@@ -218,6 +254,7 @@ export async function runConsolidation(
     status,
     per_source: perSource,
     counters,
+    snapshot_metadata: snapshotMetadataForConfig(opts.config),
   });
 
   // NOTE: `completed` is NOT emitted here. The CLI wrapper consolidate()
@@ -238,6 +275,30 @@ export async function runConsolidation(
     invoice_rows_inserted: writeResult.invoice_rows_inserted,
     audit_findings_inserted: writeResult.audit_findings_inserted,
     refresh_id: writeResult.refresh_id,
+  };
+}
+
+/**
+ * Metadata is a snapshot boundary, not a best-effort provenance field. The
+ * executive report preserves its exact source; older modes get stable,
+ * nonempty identifiers while retaining the same v2/2026 contract.
+ */
+function snapshotMetadataForConfig(config: SheetsConfig): SnapshotMetadataInput {
+  if (config.report_source !== undefined) {
+    return {
+      source_spreadsheet_id: config.report_source.spreadsheet_id,
+      source_tab: config.report_source.data_tab,
+    };
+  }
+  if (config.folder_source !== undefined) {
+    return {
+      source_spreadsheet_id: `folder:${config.folder_source.drive_folder_id}`,
+      source_tab: 'configured-tabs',
+    };
+  }
+  return {
+    source_spreadsheet_id: 'legacy:configured-sheets',
+    source_tab: 'configured-tabs',
   };
 }
 
@@ -282,10 +343,6 @@ export function computeCounters(rows: readonly NormalizedRow[]): RefreshCounters
   };
 }
 
-function isDashboardEligibleRow(row: ReturnType<typeof adaptSheet>[number]): boolean {
-  return row.status?.trim() === 'Done' && parseDateCell(row.invoice_date) !== null;
-}
-
 /* ----------------------------------------------------------------------- */
 /* CLI wrapper.                                                             */
 /* ----------------------------------------------------------------------- */
@@ -311,6 +368,10 @@ export async function consolidate(opts: CliConsolidateOptions): Promise<Consolid
   const dataDir = resolve(opts.dataDir);
   const livePath = resolve(dataDir, 'consolidated.sqlite');
   const stagingPath = resolve(dataDir, 'consolidated.sqlite.new');
+
+  // A fresh clone has no ignored data directory yet. Create it before
+  // better-sqlite3 opens the staging database.
+  mkdirSync(dataDir, { recursive: true });
 
   // Drop any leftover staging file from a previous failed run.
   if (existsSync(stagingPath)) {

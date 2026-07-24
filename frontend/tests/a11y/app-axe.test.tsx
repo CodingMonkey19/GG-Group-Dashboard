@@ -28,7 +28,8 @@ import type { ApiDataResponse } from '../../src/lib/contracts';
 
 function syntheticEnvelope(): ApiDataResponse {
   return {
-    schema_version: 1,
+    schema_version: 2,
+    reporting_year: 2026,
     last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success',
     duration_ms: 1234,
@@ -64,6 +65,7 @@ function syntheticEnvelope(): ApiDataResponse {
         native_amount: 100,
         native_currency: 'EUR',
         eur_amount: 100,
+        savings_eur: 10,
         ecb_rate: 1,
         ecb_rate_as_of: '2026-04-01',
         conversion_status: 'converted',
@@ -91,6 +93,7 @@ function syntheticEnvelope(): ApiDataResponse {
         native_amount: 200,
         native_currency: 'EUR',
         eur_amount: 200,
+        savings_eur: 20,
         ecb_rate: 1,
         ecb_rate_as_of: '2026-04-01',
         conversion_status: 'converted',
@@ -118,6 +121,7 @@ function syntheticEnvelope(): ApiDataResponse {
         native_amount: 50,
         native_currency: 'EUR',
         eur_amount: 50,
+        savings_eur: 5,
         ecb_rate: 1,
         ecb_rate_as_of: '2026-04-15',
         conversion_status: 'converted',

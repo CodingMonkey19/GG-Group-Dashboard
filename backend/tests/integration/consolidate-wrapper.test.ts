@@ -52,6 +52,48 @@ function makeConfig(spreadsheetId: string, orderCode: string, tabs: string[]): s
   });
 }
 
+function makeReportSourceConfig(): string {
+  return JSON.stringify({
+    schema_version: 1,
+    report_source: {
+      spreadsheet_id: 'REPORT_2026',
+      data_tab: 'Clean Data',
+      monthly_summary_tab: 'Monthly Spending',
+      order_summary_tab: 'Order Summary',
+      reporting_year: 2026,
+      headers: {
+        order: 'Order',
+        source_tab: 'Source Tab',
+        source_row: 'Source Row',
+        invoice_date: 'Invoice Date',
+        reporting_month: 'Month',
+        link_builder: 'Link Builder',
+        website: 'Website',
+        spend_eur: 'Price (EUR)',
+        invoice_url: 'Invoice',
+        live_url: 'Live URL',
+        invoice_status: 'Invoice Status',
+        included: 'Included in Reporting Period',
+        data_quality_issue: 'Data Quality Issue',
+        savings_eur: 'Saving (EUR)',
+      },
+    },
+  });
+}
+
+function makeFolderSourceConfig(folderId: string): string {
+  return JSON.stringify({
+    schema_version: 1,
+    folder_source: {
+      drive_folder_id: folderId,
+      standard_column_mapping: {
+        status: 'A',
+        price: 'G',
+      },
+    },
+  });
+}
+
 function setup(): TestEnv {
   const dataDir = mkdtempSync(resolve(tmpdir(), 'gg-spend-wrapper-'));
   const configPath = resolve(dataDir, 'sheets.json');
@@ -378,5 +420,72 @@ describe('consolidate() — all-source-failed must not wipe prior snapshot (Code
     // SSE: error, no completed.
     expect(events.some((e) => e.event === 'error')).toBe(true);
     expect(events.some((e) => e.event === 'completed')).toBe(false);
+  });
+});
+
+describe('consolidate() — report and empty source modes', () => {
+  let env: TestEnv;
+
+  beforeEach(async () => {
+    env = setup();
+    writeFileSync(
+      env.configPath,
+      makeConfig('HAPPY', 'HAPPY', ['Previous Orders', 'April 2026']),
+    );
+    await consolidate({
+      configPath: env.configPath,
+      dataDir: env.dataDir,
+      pdfRoot: '/tmp/never-used',
+      gwsFactory: () => new FixtureGws({ fixturesRoot: FIXTURES_ROOT }),
+      ecbSeeder: async (db) => {
+        upsertEcbRate(db, '2026-04-15', 'EUR', 1.0);
+      },
+    });
+  });
+
+  afterEach(() => teardown(env));
+
+  it('uses the wired report reader rather than the temporary unsupported-source guard', async () => {
+    writeFileSync(env.configPath, makeReportSourceConfig());
+
+    const result = await consolidate({
+      configPath: env.configPath,
+      dataDir: env.dataDir,
+      pdfRoot: '/tmp/never-used',
+      gwsFactory: () => new FixtureGws({ fixturesRoot: FIXTURES_ROOT }),
+      ecbSeeder: async () => {
+        // no-op
+      },
+    });
+
+    expect(result.status).toBe('success');
+    expect(result.per_source[0]).toMatchObject({
+      spreadsheet_id: 'REPORT_2026',
+      order_code: '2026 Spending Report',
+      rows_pulled: 3,
+    });
+    expect(existsSync(env.livePath)).toBe(true);
+    expect(existsSync(env.stagingPath)).toBe(false);
+  });
+
+  it('preserves the prior snapshot when source preparation returns no sources', async () => {
+    const goodBytesBefore = readFileSync(env.livePath);
+    writeFileSync(env.configPath, makeFolderSourceConfig('EMPTY_FOLDER'));
+
+    await expect(consolidate({
+      configPath: env.configPath,
+      dataDir: env.dataDir,
+      pdfRoot: '/tmp/never-used',
+      gwsFactory: () => new FixtureGws({
+        fixturesRoot: FIXTURES_ROOT,
+        folderSpreadsheets: new Map([['EMPTY_FOLDER', []]]),
+      }),
+      ecbSeeder: async () => {
+        // no-op
+      },
+    })).rejects.toThrow('ingest prepared zero sources');
+
+    expect(readFileSync(env.livePath).equals(goodBytesBefore)).toBe(true);
+    expect(existsSync(env.stagingPath)).toBe(false);
   });
 });

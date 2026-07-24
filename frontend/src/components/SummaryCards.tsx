@@ -57,7 +57,7 @@ export function SummaryCards({ total, scope, monthBucket, emptyMessage, onDrillD
   // and lifetime-per-order). When the scope IS 'Undated', we suppress
   // the hint because every row is undated by definition and the scope
   // label already says so.
-  const showUndatedHint = total.undated_count > 0 && monthBucket !== 'Undated';
+  const showUndatedHint = false;
 
   return (
     <section className="summary-cards" aria-label={scope ?? 'Spend summary'}>
@@ -71,10 +71,10 @@ export function SummaryCards({ total, scope, monthBucket, emptyMessage, onDrillD
               onClick={onDrillDown}
               title="Click to see contributing invoices"
             >
-              {fmtEur(total.eur)}
+              {fmtEur(total.spend_eur)}
             </button>
           ) : (
-            fmtEur(total.eur)
+            fmtEur(total.spend_eur)
           )}
         </div>
         <div className="summary-card__sub">
@@ -86,8 +86,7 @@ export function SummaryCards({ total, scope, monthBucket, emptyMessage, onDrillD
                 className="summary-card__undated-hint"
                 title="Undated invoices are included in the total. Drill down to see them."
               >
-                {fmtNum(total.undated_count)} undated{' '}
-                {total.undated_count === 1 ? 'row' : 'rows'} included
+                0 undated rows included
               </span>
             </>
           )}
@@ -105,14 +104,14 @@ export function SummaryCards({ total, scope, monthBucket, emptyMessage, onDrillD
 function StatusCard(props: {
   label: string;
   tone: 'paid' | 'unpaid' | 'warn';
-  eur: number;
+  spend_eur: number;
   count: number;
 }): JSX.Element {
   const className = `summary-card summary-card--${props.tone}`;
   return (
     <div className={className}>
       <div className="summary-card__label">{props.label}</div>
-      <div className="summary-card__value">{fmtEur(props.eur)}</div>
+      <div className="summary-card__value">{fmtEur(props.spend_eur)}</div>
       <div className="summary-card__sub">
         {fmtNum(props.count)} {props.count === 1 ? 'invoice' : 'invoices'}
       </div>
