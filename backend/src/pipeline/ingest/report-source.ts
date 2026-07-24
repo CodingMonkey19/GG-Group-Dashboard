@@ -20,7 +20,9 @@ import type { AdapterRow } from './sheet-adapter.js';
 import type { GwsWrapper, RawRow } from './gws.js';
 
 const REPORT_RANGE = 'A1:Z5001';
-const OVERFLOW_SENTINEL_RANGE = 'A5002:Z5002';
+// Start the probe inside the sheet grid. Google rejects a range whose first
+// row is beyond the current grid size, even though a larger end row is safe.
+const OVERFLOW_PROBE_RANGE = 'A1:Z5002';
 const MAX_DATA_ROWS = 5_000;
 
 export interface ReportSourceBatch {
@@ -59,7 +61,7 @@ export async function readReportSource(
     gws.pullSheetRange(config.spreadsheet_id, config.order_summary_tab, REPORT_RANGE, {
       valueRenderOption: 'UNFORMATTED_VALUE',
     }),
-    gws.pullSheetRange(config.spreadsheet_id, config.data_tab, OVERFLOW_SENTINEL_RANGE, {
+    gws.pullSheetRange(config.spreadsheet_id, config.data_tab, OVERFLOW_PROBE_RANGE, {
       valueRenderOption: 'FORMATTED_VALUE',
     }),
   ]);
@@ -74,7 +76,7 @@ export async function readReportSource(
 
   const columns = resolveRequiredColumns(formattedRows[0]!.cells, config);
   validatePairIdentities(formattedRows, unformattedRows, columns);
-  if (overflowRows.some(hasNonBlankCell)) {
+  if (overflowRows.some((row) => row.row_index > MAX_DATA_ROWS + 1 && hasNonBlankCell(row))) {
     throw new ReportSourceError(`report data tab exceeds ${MAX_DATA_ROWS} data rows`);
   }
 
@@ -113,7 +115,10 @@ export async function readReportSource(
 
     const spend = parseRawMoney(unformattedCell(unformatted, columns.spend_eur));
     if (spend === null) throw rowError(formatted, 'included 2026 row has invalid Price (EUR)');
-    const savings = parseRawMoney(unformattedCell(unformatted, columns.savings_eur));
+    const rawSavings = unformattedCell(unformatted, columns.savings_eur);
+    // The executive report intentionally leaves Savings blank when there is
+    // no comparison price. Its summary formulas treat those cells as zero.
+    const savings = rawSavings.trim().length === 0 ? 0 : parseRawMoney(rawSavings);
     if (savings === null) throw rowError(formatted, 'included 2026 row has invalid Saving (EUR)');
 
     const reportingMonth = parseReportingMonth(formattedCell(formatted, columns.reporting_month));
