@@ -23,6 +23,8 @@ import type { MonthBreakdown } from '../lib/selectors';
 interface Props {
   data: MonthBreakdown[];
   height?: number;
+  currentMonth?: string | null;
+  comparisonMonth?: string | null;
 }
 
 interface Stack {
@@ -85,7 +87,12 @@ function processMonth(d: MonthBreakdown): ProcessedMonth {
   return { m: d.m, total, stacks };
 }
 
-export function StackedBars({ data, height = 320 }: Props): JSX.Element {
+export function StackedBars({
+  data,
+  height = 320,
+  currentMonth = null,
+  comparisonMonth = null,
+}: Props): JSX.Element {
   const W = 1000;
   const H = height;
   const padL = 64;
@@ -246,6 +253,8 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
           // first, then live hover. While pinned, mouse movement does
           // not change which bar shows the stack.
           const isActive = active === i;
+          const isComparison = d.m === comparisonMonth;
+          const isCurrent = d.m === currentMonth;
           const totalH = (d.total / topTick) * innerH;
           const barTopY = padT + innerH - totalH;
 
@@ -269,7 +278,7 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
                   y={barTopY}
                   width={bw}
                   height={totalH}
-                  fill="var(--accent-2)"
+                  fill={isComparison ? 'var(--ink-4)' : 'var(--accent-2)'}
                   opacity={active === null ? 1 : 0.4}
                   rx="3"
                 />
@@ -277,7 +286,7 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
                   x={x + bw / 2}
                   y={H - 12}
                   textAnchor="middle"
-                  className="chart__axis-label"
+                  className={`chart__axis-label${isCurrent ? ' chart__axis-label--current' : ''}${isComparison ? ' chart__axis-label--comparison' : ''}`}
                 >
                   {monthShortStr(d.m)}
                 </text>
@@ -337,7 +346,7 @@ export function StackedBars({ data, height = 320 }: Props): JSX.Element {
                 x={x + bw / 2}
                 y={H - 12}
                 textAnchor="middle"
-                className="chart__axis-label"
+                className={`chart__axis-label${isCurrent ? ' chart__axis-label--current' : ''}${isComparison ? ' chart__axis-label--comparison' : ''}`}
               >
                 {monthShortStr(d.m)}
               </text>

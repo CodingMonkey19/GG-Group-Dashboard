@@ -15,6 +15,8 @@ interface Props {
   data: number[];
   labels: string[];
   height?: number;
+  currentIndex?: number | null;
+  comparisonIndex?: number | null;
 }
 
 interface NiceTicksOptions {
@@ -34,7 +36,13 @@ function niceTicks(maxVal: number, options: NiceTicksOptions = {}): number[] {
   return out;
 }
 
-export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
+export function LineChart({
+  data,
+  labels,
+  height = 280,
+  currentIndex = null,
+  comparisonIndex = null,
+}: Props): JSX.Element {
   const W = 1000;
   const H = height;
   const padL = 56;
@@ -64,12 +72,30 @@ export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
   const area = `${path} L${last[0]},${padT + innerH} L${first[0]},${padT + innerH} Z`;
   const xEvery = Math.max(1, Math.ceil(values.length / 8));
 
-  function tooltipMeta(i: number): { v: number; delta: number | null } {
+  function tooltipMeta(i: number): { v: number; delta: number | null; deltaLabel: string } {
     const v = values[i] ?? 0;
-    const prev = i > 0 ? values[i - 1] ?? null : null;
-    const delta = prev !== null && prev > 0 ? Math.round(((v - prev) / prev) * 100) : null;
-    return { v, delta };
+    const isCurrentComparison = i === currentIndex
+      && comparisonIndex !== null
+      && comparisonIndex >= 0
+      && comparisonIndex < values.length;
+    const baselineIndex = isCurrentComparison ? comparisonIndex : i - 1;
+    const baseline = baselineIndex >= 0 ? values[baselineIndex] ?? null : null;
+    const delta = baseline !== null && baseline > 0
+      ? Math.round(((v - baseline) / baseline) * 100)
+      : null;
+    const comparedLabel = isCurrentComparison
+      ? safeLabels[comparisonIndex] ?? 'comparison'
+      : 'previous';
+    return { v, delta, deltaLabel: `vs ${comparedLabel}` };
   }
+
+  const periodMarkers = [
+    comparisonIndex === null ? null : { index: comparisonIndex, role: 'comparison' },
+    currentIndex === null ? null : { index: currentIndex, role: 'current' },
+  ].filter((item): item is { index: number; role: string } =>
+    item !== null && item.index >= 0 && item.index < points.length,
+  );
+  const markerWidth = Math.min(Math.max(step * 0.58, 24), 64);
 
   return (
     <svg
@@ -99,6 +125,30 @@ export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
         );
       })}
 
+      {periodMarkers.map(({ index, role }) => {
+        const point = points[index];
+        if (point === undefined) return null;
+        return (
+          <g key={`period-${role}-${index}`}>
+            <rect
+              x={point[0] - markerWidth / 2}
+              y={padT}
+              width={markerWidth}
+              height={innerH}
+              rx="5"
+              className={`chart__period-band chart__period-band--${role}`}
+            />
+            <line
+              x1={point[0]}
+              x2={point[0]}
+              y1={padT}
+              y2={padT + innerH}
+              className={`chart__period-line chart__period-line--${role}`}
+            />
+          </g>
+        );
+      })}
+
       <path d={area} className="chart__area" style={{ fill: 'url(#line-area-grad)' }} />
       <path d={path} className="chart__line" />
 
@@ -107,9 +157,13 @@ export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
           key={`dot-${i}`}
           cx={p[0]}
           cy={p[1]}
-          r={hover === i ? 5.5 : 3}
-          className="chart__dot"
-        />
+          r={hover === i ? 6 : i === currentIndex || i === comparisonIndex ? 5 : 3}
+          className={`chart__dot${i === currentIndex ? ' chart__dot--current' : ''}${i === comparisonIndex ? ' chart__dot--comparison' : ''}`}
+        >
+          {(i === currentIndex || i === comparisonIndex) && (
+            <title>{`${safeLabels[i] ?? ''} · ${i === currentIndex ? 'selected period' : 'comparison period'}`}</title>
+          )}
+        </circle>
       ))}
 
       {safeLabels.map((lbl, i) => {
@@ -143,7 +197,7 @@ export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
 
       {hover !== null && points[hover] !== undefined && (() => {
         const p = points[hover]!;
-        const { v, delta } = tooltipMeta(hover);
+        const { v, delta, deltaLabel } = tooltipMeta(hover);
         const tipW = 170;
         const tipH = delta !== null ? 64 : 44;
         const tipX = Math.min(W - padR - tipW, Math.max(padL, p[0] - tipW / 2));
@@ -172,7 +226,7 @@ export function LineChart({ data, labels, height = 280 }: Props): JSX.Element {
                   y="56"
                   className={`chart__tip-delta chart__tip-delta--${delta >= 0 ? 'up' : 'down'}`}
                 >
-                  {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs previous
+                  {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% {deltaLabel}
                 </text>
               )}
             </g>

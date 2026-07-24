@@ -27,6 +27,7 @@ import {
   rowsDoneSeries,
   spendInScope,
   websiteCurrentPrices,
+  type MonthBreakdown,
   type SpendScope,
 } from './lib/selectors';
 import {
@@ -465,6 +466,28 @@ function SpendView({
     () => monthlyBreakdowns(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
     [data, scope.year, scope.month, scope.orderCode, today],
   );
+  const comparisonBreakdowns = useMemo(
+    () => compareMonth === null
+      ? []
+      : monthlyBreakdowns(data, {
+          year: REPORTING_YEAR,
+          month: compareMonth,
+          orderCode: order,
+        }, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, compareMonth, order, today],
+  );
+  const chartBreakdowns = useMemo(() => {
+    if (compareMonth === null || scopeMode === 'year') return breakdowns;
+
+    const currentKey = `${REPORTING_YEAR}-${month}`;
+    const comparisonKey = `${REPORTING_YEAR}-${compareMonth}`;
+    const byMonth = new Map<string, MonthBreakdown>();
+    for (const item of [...comparisonBreakdowns, ...breakdowns]) byMonth.set(item.m, item);
+
+    return [comparisonKey, currentKey]
+      .sort()
+      .map((key) => byMonth.get(key) ?? { m: key, total: 0, byProject: [] });
+  }, [breakdowns, comparisonBreakdowns, compareMonth, month, scopeMode]);
   const ranked = useMemo(() => {
     const totals = new Map<string, number>();
     for (const b of breakdowns) {
@@ -484,6 +507,20 @@ function SpendView({
     () => rowsDoneSeries(data, order, today, MIN_VISIBLE_YEAR_ROWS),
     [data, order, today],
   );
+  const chartRowsSeries = useMemo(() => {
+    const currentKey = `${REPORTING_YEAR}-${month}`;
+    const comparisonKey = compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`;
+    const counts = new Map(rowsSeries.months.map((item, index) => [item, rowsSeries.counts[index] ?? 0]));
+    counts.set(currentKey, counts.get(currentKey) ?? 0);
+    if (comparisonKey !== null) counts.set(comparisonKey, counts.get(comparisonKey) ?? 0);
+    const months = Array.from(counts.keys()).sort();
+    return {
+      months,
+      counts: months.map((item) => counts.get(item) ?? 0),
+      currentIndex: months.indexOf(currentKey),
+      comparisonIndex: comparisonKey === null ? null : months.indexOf(comparisonKey),
+    };
+  }, [rowsSeries, month, compareMonth]);
 
   const isSingleProj = order !== null;
   const periodLabel = scopeMode === 'year'
@@ -565,18 +602,38 @@ function SpendView({
       <section className="grid-2">
         <Panel
           title="Links built per month"
-          subtitle={`${rowsSeries.months.length} months${isSingleProj && order !== null ? ` · ${order}` : ''}`}
+          subtitle={`${chartRowsSeries.months.length} months${isSingleProj && order !== null ? ` · ${order}` : ''}`}
+          {...(comparisonLabel === null ? {} : {
+            legend: [
+              { label: periodLabel, cls: 'legend__dot--current' },
+              { label: comparisonLabel, cls: 'legend__dot--comparison' },
+            ],
+          })}
         >
           <LineChart
-            data={rowsSeries.counts}
-            labels={rowsSeries.months.map((m) => monthShortLabel(m))}
+            data={chartRowsSeries.counts}
+            labels={chartRowsSeries.months.map((m) => monthShortLabel(m))}
+            currentIndex={chartRowsSeries.currentIndex}
+            comparisonIndex={chartRowsSeries.comparisonIndex}
           />
         </Panel>
         <Panel
           title="Spend per month"
-          subtitle={`EUR · ${scopeLabel}`}
+          subtitle={comparisonLabel === null
+            ? `EUR · ${scopeLabel}`
+            : `EUR · ${periodLabel} vs ${comparisonLabel}`}
+          {...(comparisonLabel === null ? {} : {
+            legend: [
+              { label: periodLabel, cls: 'legend__dot--current' },
+              { label: comparisonLabel, cls: 'legend__dot--comparison' },
+            ],
+          })}
         >
-          <StackedBars data={breakdowns} />
+          <StackedBars
+            data={chartBreakdowns}
+            currentMonth={scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
+            comparisonMonth={compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
+          />
         </Panel>
       </section>
 
