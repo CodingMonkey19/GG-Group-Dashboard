@@ -23,6 +23,7 @@
 
 import { useEffect } from 'react';
 import type { InvoiceRow } from '../lib/contracts';
+import { dayLabel } from '../lib/format';
 import { artifactUrl } from '../lib/artifacts';
 import { fmtEur, fmtEurDec, fmtNum } from '../lib/format';
 
@@ -131,11 +132,11 @@ function ProvenanceRow({ row }: { row: InvoiceRow }): JSX.Element {
         <dt>ECB rate</dt>
         <dd>
           {row.ecb_rate !== null
-            ? `${row.ecb_rate} ${row.native_currency ?? ''}/EUR (as of ${row.ecb_rate_as_of ?? '?'})`
+            ? `${row.ecb_rate} ${row.native_currency ?? ''}/EUR (as of ${dayLabel(row.ecb_rate_as_of)})`
             : '—'}
         </dd>
         <dt>Invoice date</dt>
-        <dd>{row.invoice_date ?? `Undated (date_source=${row.date_source})`}</dd>
+        <dd>{row.invoice_date ? dayLabel(row.invoice_date) : `Undated (date_source=${row.date_source})`}</dd>
         <dt>Spend</dt>
         <dd>{row.eur_amount !== null ? fmtEur(row.eur_amount) : '—'}</dd>
         <dt>Savings</dt>

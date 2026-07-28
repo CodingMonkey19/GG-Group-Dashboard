@@ -131,8 +131,7 @@ export function readSnapshot(storePath: string): SnapshotReadResult {
     const invoiceRows = db.prepare(
       `SELECT * FROM invoices
         WHERE invoice_date >= '2026-01-01'
-          AND invoice_date < '2027-01-01'
-          AND invoice_month = substr(invoice_date, 1, 7)`,
+          AND invoice_date < '2027-01-01'`,
     ).all() as InvoiceDbRow[];
     const invoices: InvoiceRow[] = invoiceRows.map(toInvoiceRow);
 

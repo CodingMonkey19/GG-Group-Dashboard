@@ -63,6 +63,13 @@ export function fullMonth(bucket: string | null | undefined): string {
   return `${MONTH_LONG[idx]} ${y}`;
 }
 
+/** "2026-07-06" → "06/07/2026". Keeps every dashboard date in one EU format. */
+export function dayLabel(value: string | null | undefined): string {
+  if (!value) return '—';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
 /** Format an EUR amount with the Euro symbol and no decimals. */
 export function fmtEur(n: number | null | undefined): string {
   return `€${Math.round(n ?? 0).toLocaleString('en-US')}`;

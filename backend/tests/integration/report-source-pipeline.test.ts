@@ -34,7 +34,7 @@ function rawTotals(rows: Awaited<ReturnType<typeof readReportSource>>['rows']): 
   const savings = rows.reduce((total, row) => total + row.savings_eur, 0);
   const out: Record<string, number> = { spend, savings };
   for (const row of rows) {
-    const month = row.invoice_date?.slice(0, 7);
+    const month = row.reporting_month;
     if (month === undefined) continue;
     const monthKey = `${month}:`;
     const orderMonthKey = `${row.order_code}:${month}`;

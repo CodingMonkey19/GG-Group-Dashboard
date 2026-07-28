@@ -24,6 +24,7 @@
 
 import { useMemo, useState } from 'react';
 import type { WebsiteCurrentPrice } from '../lib/selectors';
+import { dayLabel } from '../lib/format';
 import { fmtEur, fmtNum } from '../lib/format';
 
 interface Props {
@@ -388,7 +389,9 @@ export function WebsiteTable({ rows, onDrillDown }: Props): JSX.Element {
                   )}
                 </td>
                 <td className="website-table__td-date">
-                  {r.current_price_invoice_date ?? <span className="website-table__td-date--unknown">—</span>}
+                  {r.current_price_invoice_date
+                    ? dayLabel(r.current_price_invoice_date)
+                    : <span className="website-table__td-date--unknown">—</span>}
                 </td>
                 <td className="website-table__td-history">
                   {fmtNum(r.history_count)} {r.history_count === 1 ? 'invoice' : 'invoices'}

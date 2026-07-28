@@ -152,7 +152,7 @@ export async function normalizeRow(
       ? { invoice_date: null, invoice_month: null, date_source: 'undated' as const }
       : {
           invoice_date: reportDate,
-          invoice_month: reportDate.slice(0, 7),
+          invoice_month: row.reporting_month ?? reportDate.slice(0, 7),
           date_source: 'sheet' as const,
         }
     : resolveDate({

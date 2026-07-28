@@ -122,8 +122,8 @@ export async function readReportSource(
     if (savings === null) throw rowError(formatted, 'included 2026 row has invalid Saving (EUR)');
 
     const reportingMonth = parseReportingMonth(formattedCell(formatted, columns.reporting_month));
-    if (reportingMonth === null || reportingMonth !== invoiceDate.slice(0, 7)) {
-      throw rowError(formatted, `Month does not match Invoice Date ${invoiceDate}`);
+    if (reportingMonth === null || !reportingMonth.startsWith('2026-')) {
+      throw rowError(formatted, `invalid 2026 reporting Month`);
     }
 
     rows.push({
@@ -145,6 +145,7 @@ export async function readReportSource(
       price: String(spend),
       currency: 'EUR',
       invoice_date: invoiceDate,
+      reporting_month: reportingMonth,
       invoice_url: formattedCell(formatted, columns.invoice_url),
       invoice_status: formattedCell(formatted, columns.invoice_status),
       savings_eur: savings,

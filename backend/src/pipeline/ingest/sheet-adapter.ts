@@ -39,6 +39,8 @@ export interface AdapterRow {
   price: string | undefined;
   currency: string | undefined;
   invoice_date: string | undefined;
+  /** Dashboard bucket supplied by the executive report. Monthly source tabs may intentionally differ from invoice_date. */
+  reporting_month?: string | undefined;
   invoice_url: string | undefined;
   invoice_status: string | undefined;
   /** Raw EUR savings. Legacy sheets have no savings column and use zero. */
@@ -100,6 +102,7 @@ export function adaptSheet(
         price: cell(m.price),
         currency: cell(m.currency ?? null),
         invoice_date: cell(m.invoice_date ?? null),
+        reporting_month: undefined,
         invoice_url: cell(m.invoice_url ?? null),
         invoice_status: cell(m.invoice_status ?? null),
         savings_eur: 0,

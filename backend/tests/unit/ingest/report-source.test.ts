@@ -96,6 +96,7 @@ describe('readReportSource', () => {
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
     expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
     expect(batch.rows[0]?.invoice_date).toBe('2026-01-15');
+    expect(batch.rows[0]?.reporting_month).toBe('2026-01');
     expect(batch.rows[0]?.savings_eur).toBe(10.005);
     expect(batch.rows[2]).toMatchObject({
       order_code: 'ORDER-B',
@@ -180,7 +181,7 @@ describe('readReportSource', () => {
     await expect(readReportSource(REPORT_CONFIG, gws)).rejects.toThrow('formatted/unformatted identity mismatch');
   });
 
-  it('fails for an included undated row, invalid 2026 money, and a month mismatch', async () => {
+  it('fails for an included undated row, invalid 2026 money, and an invalid reporting month', async () => {
     const undated = reportFixture((clean) => { clean.rows[7]![10] = 'TRUE'; });
     await expect(readReportSource(REPORT_CONFIG, undated.gws)).rejects.toThrow('invalid or missing Invoice Date');
 
@@ -190,8 +191,17 @@ describe('readReportSource', () => {
     const invalidSavings = reportFixture((clean) => { clean.unformatted_rows![3]![12] = 'Infinity'; });
     await expect(readReportSource(REPORT_CONFIG, invalidSavings.gws)).rejects.toThrow('invalid Saving (EUR)');
 
-    const monthMismatch = reportFixture((clean) => { clean.rows[3]![4] = 'February 2026'; });
-    await expect(readReportSource(REPORT_CONFIG, monthMismatch.gws)).rejects.toThrow('Month does not match Invoice Date');
+    const invalidMonth = reportFixture((clean) => { clean.rows[3]![4] = 'February 2025'; });
+    await expect(readReportSource(REPORT_CONFIG, invalidMonth.gws)).rejects.toThrow('invalid 2026 reporting Month');
+  });
+
+  it('keeps an explicit source-tab reporting month even when the invoice date is in another month', async () => {
+    const monthTab = reportFixture((clean) => { clean.rows[3]![4] = 'July 2026'; });
+    const batch = await readReportSource(REPORT_CONFIG, monthTab.gws);
+    expect(batch.rows[0]).toMatchObject({
+      invoice_date: '2026-01-15',
+      reporting_month: '2026-07',
+    });
   });
 
   it('fails for a blank order, invalid source row, or duplicate source identity', async () => {

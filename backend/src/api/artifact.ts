@@ -89,8 +89,7 @@ export function registerArtifactRoute(app: FastifyInstance): void {
              FROM invoices
             WHERE source_row_key = ?
               AND invoice_date >= '2026-01-01'
-              AND invoice_date < '2027-01-01'
-              AND invoice_month = substr(invoice_date, 1, 7)`,
+              AND invoice_date < '2027-01-01'`,
         )
         .get(key) as ArtifactRow | undefined;
     } catch {

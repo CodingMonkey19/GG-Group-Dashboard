@@ -120,7 +120,7 @@ export function snapshotInvoicesAreCompatible(db: DatabaseT): boolean {
       Number.isFinite(row.savings_eur) &&
       isReportingYearDate(row.invoice_date) &&
       typeof row.invoice_month === 'string' &&
-      row.invoice_month === row.invoice_date.slice(0, 7),
+      /^2026-(0[1-9]|1[0-2])$/.test(row.invoice_month),
     );
   } catch {
     return false;

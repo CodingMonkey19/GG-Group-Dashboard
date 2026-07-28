@@ -261,8 +261,8 @@ function assertSnapshotWriteInput(
     if (!isValidReportingDate(row.invoice_date)) {
       throw new Error(`writeConsolidation: ${row.source_row_key} has invalid ${REPORTING_YEAR} invoice_date`);
     }
-    if (row.invoice_month !== row.invoice_date.slice(0, 7)) {
-      throw new Error(`writeConsolidation: ${row.source_row_key} invoice_month must match invoice_date`);
+    if (typeof row.invoice_month !== 'string' || !/^2026-(0[1-9]|1[0-2])$/.test(row.invoice_month)) {
+      throw new Error(`writeConsolidation: ${row.source_row_key} has invalid 2026 reporting month`);
     }
   }
 }
