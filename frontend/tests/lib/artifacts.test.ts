@@ -38,16 +38,16 @@ function row(partial: Partial<InvoiceRow> & { invoice_type: InvoiceRow['invoice_
 }
 
 describe('artifactUrl (T084) — routes per invoice_type per contracts/api-artifact.md', () => {
-  it('pdf → /api/artifact/<source_row_key> (backend proxy, stable key)', () => {
+  it('pdf → relative api/artifact/<source_row_key> (backend proxy, stable key)', () => {
     expect(
       artifactUrl(row({ invoice_type: 'pdf', source_row_key: 'deadbeefdeadbeef' })),
-    ).toBe('/api/artifact/deadbeefdeadbeef');
+    ).toBe('./api/artifact/deadbeefdeadbeef');
   });
 
-  it('drive_pdf → /api/artifact/<source_row_key> (backend proxy)', () => {
+  it('drive_pdf → relative api/artifact/<source_row_key> (backend proxy)', () => {
     expect(
       artifactUrl(row({ invoice_type: 'drive_pdf', source_row_key: 'cafef00dcafef00d' })),
-    ).toBe('/api/artifact/cafef00dcafef00d');
+    ).toBe('./api/artifact/cafef00dcafef00d');
   });
 
   it('paypal → row.artifact_ref (direct public URL, no proxy)', () => {
@@ -156,7 +156,7 @@ describe('artifactUrl (T084) — routes per invoice_type per contracts/api-artif
     ).toBe('http://intuit.example/i/1');
   });
 
-  it('pdf / drive_pdf proxy URL is unaffected (always same-origin /api/artifact/<key>)', () => {
+  it('pdf / drive_pdf proxy URL stays same-origin under the deployment path', () => {
     // Sanity: even if a sheet sets artifact_ref to javascript:..., pdf rows
     // route to the backend proxy by source_row_key, not the cell value.
     expect(
@@ -167,6 +167,6 @@ describe('artifactUrl (T084) — routes per invoice_type per contracts/api-artif
           source_row_key: 'deadbeefdeadbeef',
         }),
       ),
-    ).toBe('/api/artifact/deadbeefdeadbeef');
+    ).toBe('./api/artifact/deadbeefdeadbeef');
   });
 });

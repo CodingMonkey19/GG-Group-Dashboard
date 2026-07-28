@@ -28,7 +28,7 @@ export class ApiError extends Error {
  * Returns null when the backend reports `never_refreshed` (HTTP 503 with
  * `error: 'never_refreshed'`) so the caller can render the empty state.
  */
-export async function fetchData(baseUrl = ''): Promise<ApiDataResponse | null> {
+export async function fetchData(baseUrl = '.'): Promise<ApiDataResponse | null> {
   const res = await fetch(`${baseUrl}/api/data`, { headers: { Accept: 'application/json' } });
 
   if (res.status === 503) {
@@ -70,7 +70,7 @@ export interface RefreshHandlers {
  * Open a refresh SSE stream by issuing POST /api/refresh.
  * Returns an AbortController so the caller can stop the stream early.
  */
-export function subscribeRefresh(handlers: RefreshHandlers, baseUrl = ''): AbortController {
+export function subscribeRefresh(handlers: RefreshHandlers, baseUrl = '.'): AbortController {
   const ctrl = new AbortController();
 
   void (async () => {

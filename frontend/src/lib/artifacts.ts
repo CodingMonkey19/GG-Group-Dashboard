@@ -37,7 +37,7 @@ const SAFE_SCHEMES = new Set(['http:', 'https:']);
 /**
  * Returns the URL only if it parses cleanly with a safe http(s) scheme.
  * `javascript:`, `data:`, `vbscript:`, and any other scheme → null.
- * Relative-looking strings (e.g., the `/api/artifact/...` proxy path)
+ * Relative-looking strings (e.g., the `./api/artifact/...` proxy path)
  * are treated as same-origin and pass through unchanged.
  */
 function safeExternalUrl(raw: string | null): string | null {
@@ -60,7 +60,7 @@ export function artifactUrl(row: InvoiceRow): string | null {
   switch (row.invoice_type) {
     case 'pdf':
     case 'drive_pdf':
-      return `/api/artifact/${row.source_row_key}`;
+      return `./api/artifact/${row.source_row_key}`;
     case 'paypal':
     case 'intuit':
       return safeExternalUrl(row.artifact_ref);
