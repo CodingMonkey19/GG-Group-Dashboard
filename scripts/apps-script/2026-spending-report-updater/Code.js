@@ -18,8 +18,9 @@ const UPDATE_CONFIG_ = Object.freeze({
   stagingTab: '__2026 Refresh Staging',
   stateProperty: 'REPORT_2026_REFRESH_STATE',
   continuationHandler: 'continueRefresh2026Report',
-  sourceBatchSize: 5,
-  orderTabBatchSize: 10,
+  sourceBatchSize: 2,
+  orderTabBatchSize: 5,
+  excludedOrders: ['LiveSportsOdds'],
   cleanHeaders: [
     'Order', 'Source Tab', 'Source Row', 'Invoice Date', 'Month',
     'Link Builder', 'Website', 'Niche', 'DR', 'Traffic', 'Price (EUR)',
@@ -109,13 +110,14 @@ function refresh2026SpendingReport() {
     report.toast('Reading the existing report orders and Orders column C…', '2026 Report', 10);
     const throughDate = reportThroughDate_();
     const existing = readExistingReportState_(report);
-    const selections = selectExistingOrderSources_(report, existing.orderTabs);
-    if (selections.length !== existing.orderTabs.size) {
+    const activeOrderTabs = activeOrderTabs_(existing.orderTabs);
+    const selections = selectExistingOrderSources_(report, activeOrderTabs);
+    if (selections.length !== activeOrderTabs.size) {
       const selected = new Set(selections.map((item) => item.key));
-      const skipped = [...existing.orderTabs.keys()].filter((key) => !selected.has(key));
+      const skipped = [...activeOrderTabs.keys()].filter((key) => !selected.has(key));
       throw new Error(
         'The update was stopped because existing report orders are missing from Orders!C1:C106 or the source registry: ' +
-        skipped.map((key) => existing.orderTabs.get(key).order).join(', '),
+        skipped.map((key) => activeOrderTabs.get(key).order).join(', '),
       );
     }
 
@@ -157,7 +159,7 @@ function continueRefresh2026Report() {
     const throughDate = parseIsoDate_(state.throughDate);
     if (!throughDate) throw new Error('The saved refresh date is invalid.');
     const existing = readExistingReportState_(report);
-    validateSavedSelections_(state.selections, existing.orderTabs);
+    validateSavedSelections_(state.selections, activeOrderTabs_(existing.orderTabs));
 
     if (state.phase === 'sources') {
       runSourceBatch_(report, state, existing, throughDate);
@@ -197,6 +199,8 @@ function runSourceBatch_(report, state, existing, throughDate) {
     } catch (error) {
       if (!isDocumentPermissionError_(error)) throw error;
       selection.authoritativeMonths = [];
+      selection.authoritativeCohorts = [];
+      selection.sourceIssues = [];
       state.skippedOrders = state.skippedOrders || [];
       if (!state.skippedOrders.includes(selection.order)) state.skippedOrders.push(selection.order);
     }
@@ -218,12 +222,18 @@ function isDocumentPermissionError_(error) {
 function runCoreWrite_(report, state, existing, throughDate) {
   report.toast('Merging current order data and replacing authoritative month tabs…', '2026 Report', 12);
   const incomingRecords = readStagedRecords_(report);
+  const activeOrderTabs = activeOrderTabs_(existing.orderTabs);
+  const activeExistingRecords = existing.existingRecords.filter((record) =>
+    activeOrderTabs.has(record.orderKey),
+  );
+  validateSourceScans_(state.selections);
+  validateAuthoritativeCohorts_(state.selections, incomingRecords);
   const authoritativeMonths = authoritativeMonthKeys_(state.selections);
-  const preservedHistoryCount = existing.existingRecords.filter((record) =>
+  const preservedHistoryCount = activeExistingRecords.filter((record) =>
     !authoritativeMonths.has(orderMonthKey_(record.orderKey, record.monthKey)),
   ).length;
   const records = mergeRecordsPreservingHistory_(
-    existing.existingRecords,
+    activeExistingRecords,
     incomingRecords,
     authoritativeMonths,
   );
@@ -234,11 +244,11 @@ function runCoreWrite_(report, state, existing, throughDate) {
   attachPriceComparisons_(records, priceAnchors);
   replaceStagedRecords_(report, records);
   const model = buildModel_(records, state.selections, throughDate);
-  validateModel_(model, state.selections, existing.orderTabs);
+  validateModel_(model, state.selections, activeOrderTabs);
   writeCleanData_(requireSheet_(report, 'Clean Data'), model.records);
   writeComparison_(requireSheet_(report, 'Site Price Comparison'), model.records);
   writeMonthly_(requireSheet_(report, 'Monthly Spending'), model);
-  writeOrderSummary_(requireSheet_(report, 'Order Summary'), model, existing.orderTabs);
+  writeOrderSummary_(requireSheet_(report, 'Order Summary'), model, activeOrderTabs);
   state.phase = 'orders';
   state.nextOrder = 0;
   state.records = model.records.length;
@@ -250,7 +260,8 @@ function runCoreWrite_(report, state, existing, throughDate) {
 function runOrderTabBatch_(report, state, existing, throughDate) {
   const records = readStagedRecords_(report);
   const model = buildModel_(records, state.selections, throughDate);
-  validateModel_(model, state.selections, existing.orderTabs);
+  const activeOrderTabs = activeOrderTabs_(existing.orderTabs);
+  validateModel_(model, state.selections, activeOrderTabs);
   const start = Number(state.nextOrder || 0);
   const end = Math.min(start + UPDATE_CONFIG_.orderTabBatchSize, model.orders.length);
   report.toast(
@@ -259,7 +270,7 @@ function runOrderTabBatch_(report, state, existing, throughDate) {
     10,
   );
   model.orders.slice(start, end).forEach((order) => {
-    writeOrderTab_(existing.orderTabs.get(order.key).sheet, order, model);
+    writeOrderTab_(activeOrderTabs.get(order.key).sheet, order, model);
   });
   state.nextOrder = end;
   if (end >= model.orders.length) {
@@ -274,12 +285,14 @@ function runOrderTabBatch_(report, state, existing, throughDate) {
 function finishRefresh_(report, state, existing, throughDate) {
   const records = readStagedRecords_(report);
   const model = buildModel_(records, state.selections, throughDate);
-  validateModel_(model, state.selections, existing.orderTabs);
+  const activeOrderTabs = activeOrderTabs_(existing.orderTabs);
+  validateModel_(model, state.selections, activeOrderTabs);
   writeDashboard_(requireSheet_(report, 'Dashboard'), model);
   writeDataIssues_(requireSheet_(report, 'Data Issues'));
+  hideExcludedOrderTabs_(existing.orderTabs);
   installRefreshButton();
   SpreadsheetApp.flush();
-  verifyWrittenReport_(report, model, existing.orderTabs);
+  verifyWrittenReport_(report, model, activeOrderTabs);
   removeStagingSheet_(report);
   clearRefreshState_();
   clearContinuationTriggers_();
@@ -620,6 +633,7 @@ function selectExistingOrderSources_(report, existingOrderTabs) {
 
   const selections = [];
   existingOrderTabs.forEach(({ order }, key) => {
+    if (isExcludedOrderKey_(key)) return;
     if (!control.has(key)) return;
     const sourceId = sources.get(key);
     if (!sourceId) return;
@@ -634,7 +648,11 @@ function collectReportRows_(selections, existing, throughDate) {
     const sourceBook = SpreadsheetApp.openById(selection.sourceId);
     const sourceSheets = sourceBook.getSheets();
     const explicitMonths = new Set(sourceSheets.map((sheet) => explicitMonthKey_(sheet.getName())).filter(Boolean));
-    selection.authoritativeMonths = [...explicitMonths].sort();
+    const authoritativeCohorts = new Map();
+    const explicitDoneRows = new Map();
+    selection.authoritativeMonths = [];
+    selection.authoritativeCohorts = [];
+    selection.sourceIssues = [];
     const throughMonth = monthKey_(throughDate);
     sourceSheets.forEach((sheet) => {
       if (isGeneratedSourceTab_(sheet.getName()) || sheet.getLastRow() < 2) return;
@@ -644,7 +662,22 @@ function collectReportRows_(selections, existing, throughDate) {
       const scanRows = Math.min(sheet.getLastRow(), 50);
       const scan = sheet.getRange(1, 1, scanRows, width).getDisplayValues();
       const headerOffset = findStandardHeaderOffset_(scan);
-      if (headerOffset < 0) return;
+      if (headerOffset < 0) {
+        if (tabMonth) {
+          const doneCount = sheet.getRange(1, 1, sheet.getLastRow(), 1)
+            .getDisplayValues()
+            .filter((row) => String(row[0] || '').trim() === 'Done').length;
+          explicitDoneRows.set(tabMonth, (explicitDoneRows.get(tabMonth) || 0) + doneCount);
+          if (doneCount > 0) {
+            selection.sourceIssues.push(
+              selection.order + ' ' + sheet.getName() +
+              ' contains ' + doneCount + ' Done rows but its standard headers were not recognized.',
+            );
+          }
+        }
+        return;
+      }
+      const recordsBeforeTab = records.length;
       const header = scan[headerOffset].map((value) => String(value || '').trim());
       const index = headerIndex_(header);
       const startRow = headerOffset + 2;
@@ -654,13 +687,20 @@ function collectReportRows_(selections, existing, throughDate) {
       // protected source may still be read and reported even if its display
       // format cannot be changed by the current user.
       try {
-        sheet.getRange(startRow, 13, rowCount, 1).setNumberFormat('dd/MM/yyyy');
+        const invoiceDateRange = sheet.getRange(startRow, 13, rowCount, 1);
+        const needsCanonicalDateFormat = invoiceDateRange.getNumberFormats()
+          .some((row) => row[0] !== 'dd/MM/yyyy');
+        if (needsCanonicalDateFormat) invoiceDateRange.setNumberFormat('dd/MM/yyyy');
       } catch (error) {
         selection.dateFormatSkippedTabs = selection.dateFormatSkippedTabs || [];
         selection.dateFormatSkippedTabs.push(sheet.getName());
       }
       const values = sheet.getRange(startRow, 1, rowCount, width).getValues();
       const display = sheet.getRange(startRow, 1, rowCount, width).getDisplayValues();
+      if (tabMonth) {
+        const doneCount = display.filter((row) => String(row[0] || '').trim() === 'Done').length;
+        explicitDoneRows.set(tabMonth, (explicitDoneRows.get(tabMonth) || 0) + doneCount);
+      }
 
       values.forEach((row, offset) => {
         const shown = display[offset];
@@ -672,9 +712,9 @@ function collectReportRows_(selections, existing, throughDate) {
         if (/(karolis|karlois)/i.test(String(shown[13] || ''))) return;
         const invoiceDate = parseDateCell_(shown[12], row[12], old && old.invoiceDate, sheet.getName());
         if (!invoiceDate || invoiceDate.getFullYear() !== UPDATE_CONFIG_.reportYear) return;
+        if (!tabMonth && dateOnly_(invoiceDate).getTime() > throughDate.getTime()) return;
         const invoiceMonth = monthKey_(invoiceDate);
         if (!tabMonth && explicitMonths.has(invoiceMonth)) return;
-        if (!tabMonth && dateOnly_(invoiceDate).getTime() > throughDate.getTime()) return;
         const reportingMonth = tabMonth || invoiceMonth;
 
         const price = priceToEur_(shown[6], row[6], invoiceDate, old);
@@ -707,13 +747,98 @@ function collectReportRows_(selections, existing, throughDate) {
           comparison: null,
         });
       });
+      if (tabMonth && records.length > recordsBeforeTab) {
+        const added = records.slice(recordsBeforeTab);
+        const cohort = authoritativeCohorts.get(tabMonth) || {
+          monthKey: tabMonth,
+          rowCount: 0,
+          totalSpend: 0,
+        };
+        cohort.rowCount += added.length;
+        cohort.totalSpend = roundMoney_(added.reduce(
+          (sum, record) => addMoney_(sum, record.priceEur),
+          cohort.totalSpend,
+        ));
+        authoritativeCohorts.set(tabMonth, cohort);
+      }
     });
+    [...explicitMonths]
+      .filter((monthKey) => monthKey <= throughMonth)
+      .forEach((monthKey) => {
+        const cohort = authoritativeCohorts.get(monthKey);
+        if (cohort && cohort.rowCount > 0) return;
+        const existingCount = existing.existingRecords.filter((record) =>
+          record.orderKey === selection.key && record.monthKey === monthKey,
+        ).length;
+        const sourceDoneCount = explicitDoneRows.get(monthKey) || 0;
+        if (existingCount > 0) {
+          selection.sourceIssues.push(
+            selection.order + ' ' + monthKey +
+            ' yielded zero eligible source rows (source Done rows: ' + sourceDoneCount +
+            ', existing report rows: ' + existingCount + ').',
+          );
+        }
+      });
+    selection.authoritativeCohorts = [...authoritativeCohorts.values()]
+      .filter((cohort) => cohort.rowCount > 0)
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    selection.authoritativeMonths = selection.authoritativeCohorts.map((cohort) => cohort.monthKey);
   });
   return records.sort((a, b) =>
     a.order.localeCompare(b.order) ||
     a.sourceTab.localeCompare(b.sourceTab) ||
     a.sourceRow - b.sourceRow,
   );
+}
+
+function validateSourceScans_(selections) {
+  const issues = [];
+  selections.forEach((selection) => {
+    (selection.sourceIssues || []).forEach((issue) => issues.push(issue));
+  });
+  if (issues.length > 0) {
+    throw new Error(
+      'The update was stopped because an explicit month scan could remove valid history: ' +
+      issues.slice(0, 5).join(' | ') +
+      (issues.length > 5 ? ' | +' + (issues.length - 5) + ' more' : ''),
+    );
+  }
+}
+
+function validateAuthoritativeCohorts_(selections, incomingRecords) {
+  const actual = new Map();
+  incomingRecords.forEach((record) => {
+    const key = orderMonthKey_(record.orderKey, record.monthKey);
+    const cohort = actual.get(key) || { rowCount: 0, totalSpend: 0 };
+    cohort.rowCount += 1;
+    cohort.totalSpend = addMoney_(cohort.totalSpend, record.priceEur);
+    actual.set(key, cohort);
+  });
+
+  selections.forEach((selection) => {
+    const expectedByMonth = new Map(
+      (selection.authoritativeCohorts || []).map((cohort) => [cohort.monthKey, cohort]),
+    );
+    (selection.authoritativeMonths || []).forEach((monthKey) => {
+      const expected = expectedByMonth.get(monthKey);
+      if (!expected || expected.rowCount < 1) {
+        throw new Error(selection.order + ' ' + monthKey + ' has an empty authoritative replacement cohort.');
+      }
+      const key = orderMonthKey_(selection.key || selection.order, monthKey);
+      const observed = actual.get(key) || { rowCount: 0, totalSpend: 0 };
+      if (observed.rowCount !== expected.rowCount) {
+        throw new Error(
+          selection.order + ' ' + monthKey + ' staged ' + observed.rowCount +
+          ' rows but the source scan collected ' + expected.rowCount + '.',
+        );
+      }
+      assertMoneyEqual_(
+        selection.order + ' ' + monthKey + ' staged spend',
+        roundMoney_(observed.totalSpend),
+        roundMoney_(expected.totalSpend),
+      );
+    });
+  });
 }
 
 function readPriceAnchors_(report) {
@@ -1250,7 +1375,16 @@ function parseDateCell_(displayValue, rawValue, existingDate, sourceTab) {
   const text = String(displayValue || '').trim();
   if (text === '') return null;
   if (/^(january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(text)) return null;
-  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) return dateOnly_(rawValue);
+  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+    const rawDate = dateOnly_(rawValue);
+    const hintedMonth = monthHint_(sourceTab);
+    const rawMonth = rawDate.getMonth() + 1;
+    if (hintedMonth && rawMonth !== hintedMonth && rawDate.getDate() === hintedMonth) {
+      const swapped = validDate_(rawDate.getFullYear(), hintedMonth, rawMonth);
+      if (swapped) return swapped;
+    }
+    return rawDate;
+  }
 
   let match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(text);
   if (match) return validDate_(Number(match[1]), Number(match[2]), Number(match[3]));
@@ -1287,7 +1421,7 @@ function findStandardHeaderOffset_(rows) {
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index].map((value) => String(value || '').trim().toLowerCase());
     if (
-      row[0] === 'status' && row[6] === 'price' && row[11] === 'live url' &&
+      row[1] === 'lb' && row[2] === 'website' && row[6] === 'price' && row[11] === 'live url' &&
       row[12] === 'invoice date' && row[13] === 'invoice' && row[14] === 'invoice status'
     ) return index;
   }
@@ -1330,6 +1464,21 @@ function normalizeOrder_(value) {
     .replace(/^test\s+/i, '')
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function isExcludedOrderKey_(value) {
+  const key = normalizeOrder_(value);
+  return UPDATE_CONFIG_.excludedOrders.some((order) => normalizeOrder_(order) === key);
+}
+
+function activeOrderTabs_(orderTabs) {
+  return new Map([...orderTabs].filter(([key]) => !isExcludedOrderKey_(key)));
+}
+
+function hideExcludedOrderTabs_(orderTabs) {
+  orderTabs.forEach(({ sheet }, key) => {
+    if (isExcludedOrderKey_(key) && !sheet.isSheetHidden()) sheet.hideSheet();
+  });
 }
 
 function normalizeDomain_(value) {
@@ -1383,7 +1532,7 @@ function monthKey_(date) {
 
 function explicitMonthKey_(sourceTab) {
   const text = String(sourceTab || '').trim().toLowerCase().replace(/[_.-]+/g, ' ').replace(/\s+/g, ' ');
-  let match = /^(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+2026)?$/.exec(text);
+  let match = /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+2026)?$/.exec(text);
   if (match) {
     const month = monthNameNumber_(match[1]);
     return month === null ? null : '2026-' + String(month).padStart(2, '0');

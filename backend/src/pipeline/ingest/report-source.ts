@@ -24,6 +24,7 @@ const REPORT_RANGE = 'A1:Z5001';
 // row is beyond the current grid size, even though a larger end row is safe.
 const OVERFLOW_PROBE_RANGE = 'A1:Z5002';
 const MAX_DATA_ROWS = 5_000;
+const EXCLUDED_REPORT_ORDERS = new Set(['livesportsodds']);
 
 export interface ReportSourceBatch {
   rows: AdapterRow[];
@@ -101,6 +102,7 @@ export async function readReportSource(
 
     const orderCode = formattedCell(formatted, columns.order).trim();
     if (orderCode.length === 0) throw rowError(formatted, 'included 2026 row has a blank Order');
+    if (EXCLUDED_REPORT_ORDERS.has(normalizeReportOrder(orderCode))) continue;
 
     const sourceTab = formattedCell(formatted, columns.source_tab).trim();
     if (sourceTab.length === 0) throw rowError(formatted, 'included 2026 row has a blank Source Tab');
@@ -169,6 +171,10 @@ export async function readReportSource(
       rows_pulled: rows.length,
     },
   };
+}
+
+function normalizeReportOrder(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 }
 
 function resolveRequiredColumns(

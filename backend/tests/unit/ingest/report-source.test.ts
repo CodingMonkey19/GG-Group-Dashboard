@@ -147,6 +147,17 @@ describe('readReportSource', () => {
     expect(batch.rows[0]?.savings_eur).toBe(0);
   });
 
+  it('excludes LiveSportsOdds from report ingestion', async () => {
+    const { gws } = reportFixture((clean) => {
+      setPairedCell(clean, 3, 0, 'LiveSportsOdds');
+      setPairedCell(clean, 4, 0, 'Live Sports Odds');
+    });
+
+    const batch = await readReportSource(REPORT_CONFIG, gws);
+
+    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-B']);
+  });
+
   it('fails for missing or duplicate required headers', async () => {
     const missing = reportFixture((clean) => { clean.rows[0]![0] = 'Order Code'; });
     await expect(readReportSource(REPORT_CONFIG, missing.gws)).rejects.toThrow('missing required header Order');
