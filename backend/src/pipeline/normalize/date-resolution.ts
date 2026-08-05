@@ -72,6 +72,7 @@ export function resolveDate(input: ResolveDateInput): ResolvedDate {
  * Accepts:
  *   • ISO 8601 date: "2026-04-15"
  *   • ISO datetime (date-only used): "2026-04-15T08:30:00Z"
+ *   • Written month date: "17-Jan-2026"
  *   • European: "15.04.2026", "15/04/2026"
  *   • US: "04/15/2026" (when day > 12 in the first slot, treated as DD/MM)
  *   • Sheets serial as a numeric string (days since 1899-12-30)
@@ -117,6 +118,16 @@ export function parseDateCell(
   if (writtenMonth) {
     const month = WRITTEN_MONTHS[writtenMonth[1]!.toLowerCase()];
     if (month !== undefined) return validIso(writtenMonth[2]!, String(month), '1');
+  }
+
+  // Google Sheets' report writer formats Clean Data dates as dd-mmm-yyyy.
+  // Keep this unambiguous format separate from numeric EU/US inference.
+  const writtenMonthDate = /^(\d{1,2})[-/. ]([A-Za-z]+)[-/. ](\d{4})$/.exec(trimmed);
+  if (writtenMonthDate) {
+    const month = WRITTEN_MONTHS[writtenMonthDate[2]!.toLowerCase()];
+    if (month !== undefined) {
+      return validIso(writtenMonthDate[3]!, String(month), writtenMonthDate[1]!);
+    }
   }
 
   // ISO YYYY-MM-DD (with optional time suffix).
