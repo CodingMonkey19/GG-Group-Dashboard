@@ -35,7 +35,7 @@ import { logger } from '../shared/logger.js';
 import { GwsError, type GwsWrapper } from './ingest/gws.js';
 import { prepareIngestSources } from './ingest/folder-source.js';
 import { GwsSubprocess } from './ingest/gws-subprocess.js';
-import { readReportSource } from './ingest/report-source.js';
+import { isExcludedReportOrder, readReportSource } from './ingest/report-source.js';
 import { reconcileReportSource } from './ingest/report-reconciliation.js';
 import { adaptSheet } from './ingest/sheet-adapter.js';
 import {
@@ -118,7 +118,7 @@ export async function runConsolidation(
   if (opts.config.report_source !== undefined) {
     const report = await readReportSource(opts.config.report_source, opts.gws);
     const reportRows = report.rows.filter(isDashboardEligibleRow);
-    adaptedRows.push(...reportRows);
+    adaptedRows.push(...report.reconciliationRows.filter(isDashboardEligibleRow));
     reportSummaries = { monthly: report.monthlySummary, orders: report.orderSummary };
     const sourceStatus: PerSourceStatus = {
       ...report.sourceStatus,
@@ -228,13 +228,29 @@ export async function runConsolidation(
     reconcileReportSource(normalizedRows, reportSummaries.monthly, reportSummaries.orders);
   }
 
+  // Reconcile the complete executive report first, including intentionally
+  // hidden orders, so its Clean Data and summary tabs must still agree. Only
+  // then remove dashboard-only exclusions from the published snapshot.
+  const publishedRows = opts.config.report_source === undefined
+    ? normalizedRows
+    : normalizedRows.filter((row) => !isExcludedReportOrder(row.order_code));
+  if (opts.config.report_source !== undefined) {
+    for (const row of normalizedRows) {
+      if (isExcludedReportOrder(row.order_code) && !excludedOrderCodes.includes(row.order_code)) {
+        excludedOrderCodes.push(row.order_code);
+      }
+    }
+    const reportStatus = perSource[0];
+    if (reportStatus !== undefined) reportStatus.rows_pulled = publishedRows.length;
+  }
+
   // ----- Phase: audit. Aggregate findings across all rows. -----
   opts.onEvent?.({ event: 'phase', data: { refresh_id, phase: 'audit' } });
-  const findings = emitFindings(normalizedRows);
+  const findings = emitFindings(publishedRows);
 
   // ----- Phase: store. Counters + write. -----
   opts.onEvent?.({ event: 'phase', data: { refresh_id, phase: 'store' } });
-  const counters = computeCounters(normalizedRows);
+  const counters = computeCounters(publishedRows);
   const completedAt = now();
   const duration_ms = Math.max(0, Date.now() - startMs);
 
@@ -247,7 +263,7 @@ export async function runConsolidation(
     status = 'failed';
   }
 
-  const writeResult = writeConsolidation(opts.db, normalizedRows, findings, {
+  const writeResult = writeConsolidation(opts.db, publishedRows, findings, {
     refresh_id,
     completed_at: completedAt,
     duration_ms,

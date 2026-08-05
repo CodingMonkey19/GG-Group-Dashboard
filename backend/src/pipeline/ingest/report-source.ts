@@ -28,6 +28,8 @@ const EXCLUDED_REPORT_ORDERS = new Set(['livesportsodds']);
 
 export interface ReportSourceBatch {
   rows: AdapterRow[];
+  /** Complete rows used to verify the workbook's own summary tabs. */
+  reconciliationRows: AdapterRow[];
   monthlySummary: RawRow[];
   orderSummary: RawRow[];
   sourceStatus: PerSourceStatus;
@@ -82,6 +84,7 @@ export async function readReportSource(
   }
 
   const rows: AdapterRow[] = [];
+  const reconciliationRows: AdapterRow[] = [];
   const seenSourceIdentities = new Set<string>();
   const numericDateOrders = inferNumericDateOrders(formattedRows, columns);
 
@@ -102,8 +105,6 @@ export async function readReportSource(
 
     const orderCode = formattedCell(formatted, columns.order).trim();
     if (orderCode.length === 0) throw rowError(formatted, 'included 2026 row has a blank Order');
-    if (EXCLUDED_REPORT_ORDERS.has(normalizeReportOrder(orderCode))) continue;
-
     const sourceTab = formattedCell(formatted, columns.source_tab).trim();
     if (sourceTab.length === 0) throw rowError(formatted, 'included 2026 row has a blank Source Tab');
     const sourceRow = parseSourceRow(formattedCell(formatted, columns.source_row));
@@ -128,7 +129,7 @@ export async function readReportSource(
       throw rowError(formatted, `invalid 2026 reporting Month`);
     }
 
-    rows.push({
+    const adapterRow: AdapterRow = {
       spreadsheet_id: config.spreadsheet_id,
       order_code: orderCode,
       // The executive tab/row identifies a report record, but provenance shown
@@ -157,11 +158,14 @@ export async function readReportSource(
       target_url: undefined,
       anchor: undefined,
       live_url: formattedCell(formatted, columns.live_url),
-    });
+    };
+    reconciliationRows.push(adapterRow);
+    if (!isExcludedReportOrder(orderCode)) rows.push(adapterRow);
   }
 
   return {
     rows,
+    reconciliationRows,
     monthlySummary,
     orderSummary,
     sourceStatus: {
@@ -171,6 +175,10 @@ export async function readReportSource(
       rows_pulled: rows.length,
     },
   };
+}
+
+export function isExcludedReportOrder(value: string): boolean {
+  return EXCLUDED_REPORT_ORDERS.has(normalizeReportOrder(value));
 }
 
 function normalizeReportOrder(value: string): string {
