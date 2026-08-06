@@ -43,11 +43,11 @@ function snapshot(invoices: InvoiceRow[]): ApiDataResponse {
   };
 }
 
-describe('selector battery over a 1000-row, 12-month 2026 snapshot', () => {
-  it('returns the 2026 spend and savings views in under 200ms', () => {
+describe('selector battery over a 1000-row 2026 source snapshot', () => {
+  it('returns the February–December dashboard views in under 200ms', () => {
     const data = snapshot(Array.from({ length: 1000 }, (_, index) => syntheticRow(index)));
-    expect(data.invoices.filter(isAggregable).length).toBeGreaterThan(900);
-    expect(distinctMonths(data)).toHaveLength(12);
+    expect(data.invoices.filter(isAggregable).length).toBeGreaterThan(800);
+    expect(distinctMonths(data)).toHaveLength(11);
     const start = performance.now();
     for (let index = 0; index < 10; index += 1) {
       monthlyTotal(data, '2026-04'); orderMonthTotal(data, 'CGLT', '2026-04');

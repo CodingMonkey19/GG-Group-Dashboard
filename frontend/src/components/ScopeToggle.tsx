@@ -22,7 +22,7 @@ export function ScopeToggle({ value, onChange }: Props): JSX.Element {
         aria-pressed={value === 'year'}
         onClick={() => onChange('year')}
       >
-        2026 Total
+        Feb–Dec 2026
       </button>
     </div>
   );

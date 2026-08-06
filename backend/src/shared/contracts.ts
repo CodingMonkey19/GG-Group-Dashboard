@@ -145,6 +145,9 @@ export const FolderSourceConfig = z
 export type FolderSourceConfig = z.infer<typeof FolderSourceConfig>;
 
 export const REPORTING_YEAR = 2026 as const;
+/** Dashboard-visible reporting period. January remains in the source workbook for reconciliation. */
+export const DASHBOARD_REPORTING_START_MONTH = '2026-02' as const;
+export const DASHBOARD_REPORTING_END_MONTH = '2027-01' as const;
 /** Version of the published, 2026-only API/store snapshot contract. */
 export const API_SCHEMA_VERSION = 2 as const;
 
@@ -376,11 +379,14 @@ export const ApiDataResponse = z
           message: `invoice_date must be within ${REPORTING_YEAR}`,
         });
       }
-      if (!invoice.invoice_month.startsWith(`${REPORTING_YEAR}-`)) {
+      if (
+        invoice.invoice_month < DASHBOARD_REPORTING_START_MONTH
+        || invoice.invoice_month >= DASHBOARD_REPORTING_END_MONTH
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['invoices', index, 'invoice_month'],
-          message: `invoice_month must be within ${REPORTING_YEAR}`,
+          message: `invoice_month must be within the dashboard period starting ${DASHBOARD_REPORTING_START_MONTH}`,
         });
       }
     }

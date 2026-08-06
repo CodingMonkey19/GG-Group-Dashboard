@@ -36,6 +36,10 @@ import {
   readSnapshotMetadata,
   snapshotInvoicesAreCompatible,
 } from '../pipeline/store/db.js';
+import {
+  DASHBOARD_REPORTING_END_MONTH,
+  DASHBOARD_REPORTING_START_MONTH,
+} from '../shared/contracts.js';
 import { logger } from '../shared/logger.js';
 import { sanitizeErrorMessage } from '../shared/sanitize.js';
 import type { InvoiceType } from '../shared/contracts.js';
@@ -88,10 +92,14 @@ export function registerArtifactRoute(app: FastifyInstance): void {
           `SELECT source_row_key, invoice_type, artifact_ref, order_code, row_index
              FROM invoices
             WHERE source_row_key = ?
-              AND invoice_date >= '2026-01-01'
-              AND invoice_date < '2027-01-01'`,
+              AND invoice_month >= ?
+              AND invoice_month < ?`,
         )
-        .get(key) as ArtifactRow | undefined;
+        .get(
+          key,
+          DASHBOARD_REPORTING_START_MONTH,
+          DASHBOARD_REPORTING_END_MONTH,
+        ) as ArtifactRow | undefined;
     } catch {
       reply.code(503);
       return { error: 'incompatible_snapshot' };

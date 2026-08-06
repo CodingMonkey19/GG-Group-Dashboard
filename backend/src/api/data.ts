@@ -21,6 +21,8 @@ import {
 import {
   API_SCHEMA_VERSION,
   AUDIT_CATEGORIES_ALL,
+  DASHBOARD_REPORTING_END_MONTH,
+  DASHBOARD_REPORTING_START_MONTH,
   ApiDataResponse,
   type ApiDataResponse as ApiDataResponseT,
   type AuditCategory,
@@ -130,9 +132,12 @@ export function readSnapshot(storePath: string): SnapshotReadResult {
 
     const invoiceRows = db.prepare(
       `SELECT * FROM invoices
-        WHERE invoice_date >= '2026-01-01'
-          AND invoice_date < '2027-01-01'`,
-    ).all() as InvoiceDbRow[];
+        WHERE invoice_month >= ?
+          AND invoice_month < ?`,
+    ).all(
+      DASHBOARD_REPORTING_START_MONTH,
+      DASHBOARD_REPORTING_END_MONTH,
+    ) as InvoiceDbRow[];
     const invoices: InvoiceRow[] = invoiceRows.map(toInvoiceRow);
 
     const findingsRows = db

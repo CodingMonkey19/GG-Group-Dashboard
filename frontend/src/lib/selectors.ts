@@ -16,10 +16,13 @@ import type {
   InvoiceRow,
   PaymentStatus,
 } from './contracts';
+import {
+  DASHBOARD_REPORTING_END_MONTH,
+  DASHBOARD_REPORTING_START_MONTH,
+} from './contracts';
 
 const REPORTING_YEAR_START = '2026-01-01';
 const REPORTING_YEAR_END = '2027-01-01';
-const REPORTING_MONTH_PREFIX = '2026-';
 
 export interface PaymentStatusBreakdown {
   paid: { spend_eur: number; count: number };
@@ -39,12 +42,13 @@ export interface ScopedTotal {
   by_status: PaymentStatusBreakdown;
 }
 
-/** True only for rows inside the dashboard's fixed 2026 reporting boundary. */
+/** True only for rows inside the dashboard's February–December 2026 reporting boundary. */
 export function isReportingYearRow(row: InvoiceRow): boolean {
   return (
     row.invoice_date >= REPORTING_YEAR_START
     && row.invoice_date < REPORTING_YEAR_END
-    && row.invoice_month.startsWith(REPORTING_MONTH_PREFIX)
+    && row.invoice_month >= DASHBOARD_REPORTING_START_MONTH
+    && row.invoice_month < DASHBOARD_REPORTING_END_MONTH
   );
 }
 

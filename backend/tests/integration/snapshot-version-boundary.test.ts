@@ -202,4 +202,42 @@ describe('v2 snapshot API boundaries', () => {
       await app.close();
     }
   });
+
+  it('publishes February onward by reporting month while retaining shifted January invoice dates', async () => {
+    const stagingPath = resolve(dataDir, 'consolidated.sqlite.new');
+    const livePath = resolve(dataDir, 'consolidated.sqlite');
+    const db = openStagingStore(stagingPath);
+    try {
+      seedMetadata(db);
+      seedRefresh(db, 2);
+      seedInvoice(db, {
+        source_row_key: '0000000000000010',
+        invoice_date: '2026-01-10',
+        invoice_month: '2026-01',
+      });
+      seedInvoice(db, {
+        source_row_key: '0000000000000020',
+        invoice_date: '2026-01-20',
+        invoice_month: '2026-02',
+      });
+    } finally {
+      db.close();
+    }
+    commitStaging(stagingPath, livePath);
+
+    const app = await buildServer({ dataDir, sheetsConfigPath: configPath });
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/data' });
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.invoices).toHaveLength(1);
+      expect(body.invoices[0]).toMatchObject({
+        source_row_key: '0000000000000020',
+        invoice_date: '2026-01-20',
+        invoice_month: '2026-02',
+      });
+    } finally {
+      await app.close();
+    }
+  });
 });

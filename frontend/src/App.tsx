@@ -524,7 +524,7 @@ function SpendView({
 
   const isSingleProj = order !== null;
   const periodLabel = scopeMode === 'year'
-    ? '2026 Total'
+    ? 'Feb–Dec 2026'
     : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
   const linksInScope = summary.count;
@@ -561,7 +561,7 @@ function SpendView({
     <>
       <Briefing
         eyebrow={`BRIEFING · ${scopeLabel.toUpperCase()}`}
-        title={scopeMode === 'year' ? '2026 total in review' : `${periodLabel} in review`}
+        title={scopeMode === 'year' ? 'February–December 2026 in review' : `${periodLabel} in review`}
         lede={`${scopeLabel} includes ${fmtNum(linksInScope)} completed rows, ${fmtEur(summary.eur)} in spend, and ${fmtEur(summary.savings_eur)} in savings${isSingleProj ? '.' : ` across ${fmtNum(activeCount)} projects.`}`}
       />
 

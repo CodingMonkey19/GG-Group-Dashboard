@@ -79,9 +79,21 @@ function data(invoices: InvoiceRow[]): ApiDataResponse {
 describe('2026 reporting selectors', () => {
   it('includes only Done, converted rows that are within the reporting year', () => {
     const valid = row();
+    const januaryReporting = row({
+      source_row_key: '3333333333333333',
+      invoice_date: '2026-01-15',
+      invoice_month: '2026-01',
+    });
+    const shiftedToFebruary = row({
+      source_row_key: '4444444444444444',
+      invoice_date: '2026-01-15',
+      invoice_month: '2026-02',
+    });
     const from2025 = { ...row({ source_row_key: '1111111111111111' }), invoice_date: '2025-12-31', invoice_month: '2025-12' } as InvoiceRow;
     const from2027 = { ...row({ source_row_key: '2222222222222222' }), invoice_date: '2027-01-01', invoice_month: '2027-01' } as InvoiceRow;
     expect(isReportingYearRow(valid)).toBe(true);
+    expect(isReportingYearRow(januaryReporting)).toBe(false);
+    expect(isReportingYearRow(shiftedToFebruary)).toBe(true);
     expect(isAggregable(valid)).toBe(true);
     expect(isAggregable(from2025)).toBe(false);
     expect(isAggregable(from2027)).toBe(false);
