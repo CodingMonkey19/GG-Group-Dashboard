@@ -61,7 +61,7 @@ describe('report source consolidation', () => {
   it('publishes only eligible 2026 rows and reconciles raw Spend/Savings', async () => {
     const gws = new FixtureGws({ fixturesRoot: FIXTURES_ROOT });
     const batch = await readReportSource(JSON.parse(reportConfig()).report_source, gws);
-    expect(batch.rows).toHaveLength(3);
+    expect(batch.rows).toHaveLength(2);
     const expectedTotals = {
       spend: 350.25, savings: 35.13,
       '2026-01:spend': 100, '2026-01:savings': 10.005,
@@ -71,7 +71,7 @@ describe('report source consolidation', () => {
       'ORDER-B:2026-07:spend': 50.25, 'ORDER-B:2026-07:savings': 5.125,
     };
     for (const [key, expected] of Object.entries(expectedTotals)) {
-      expect(rawTotals(batch.rows)[key]).toBeCloseTo(expected, 10);
+      expect(rawTotals(batch.reconciliationRows)[key]).toBeCloseTo(expected, 10);
     }
 
     const result = await consolidate({
@@ -80,23 +80,22 @@ describe('report source consolidation', () => {
     });
     expect(result.status).toBe('success');
     expect(result.per_source).toEqual([{
-      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 3,
+      spreadsheet_id: 'REPORT_2026', order_code: '2026 Spending Report', status: 'success', rows_pulled: 2,
     }]);
-    expect(result.counters).toMatchObject({ rows_total: 3, rows_done: 3, rows_undated: 0 });
+    expect(result.counters).toMatchObject({ rows_total: 2, rows_done: 2, rows_undated: 0 });
 
     const db = openStore(resolve(dataDir, 'consolidated.sqlite'));
     try {
-      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 3 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices').get()).toEqual({ count: 2 });
       const savings = db.prepare(
         'SELECT order_code, invoice_month, savings_eur FROM invoices ORDER BY order_code, invoice_month',
       ).all();
       expect(savings).toEqual([
-        { order_code: 'ORDER-A', invoice_month: '2026-01', savings_eur: 10.005 },
         { order_code: 'ORDER-A', invoice_month: '2026-07', savings_eur: 20 },
         { order_code: 'ORDER-B', invoice_month: '2026-07', savings_eur: 5.125 },
       ]);
-      expect(db.prepare('SELECT SUM(savings_eur) AS total FROM invoices').get()).toEqual({ total: 35.13 });
-      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices WHERE live_url IS NOT NULL').get()).toEqual({ count: 3 });
+      expect(db.prepare('SELECT SUM(savings_eur) AS total FROM invoices').get()).toEqual({ total: 25.125 });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invoices WHERE live_url IS NOT NULL').get()).toEqual({ count: 2 });
       const issue = db.prepare("SELECT audit_flags FROM invoices WHERE order_code='ORDER-B'").get() as { audit_flags: string };
       expect(JSON.parse(issue.audit_flags)).toContain('source_data_quality_issue:needs receipt');
       expect(db.prepare('SELECT COUNT(*) AS count FROM audit_findings').get()).toEqual({ count: 0 });

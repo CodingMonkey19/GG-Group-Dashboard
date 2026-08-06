@@ -24,6 +24,10 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Database as DatabaseT } from 'better-sqlite3';
 import { loadSheetsConfig } from '../config/load.js';
+import {
+  DASHBOARD_REPORTING_END_MONTH,
+  DASHBOARD_REPORTING_START_MONTH,
+} from '../shared/contracts.js';
 import type {
   PerSourceStatus,
   RefreshCounters,
@@ -117,8 +121,8 @@ export async function runConsolidation(
 
   if (opts.config.report_source !== undefined) {
     const report = await readReportSource(opts.config.report_source, opts.gws);
-    const reportRows = report.rows.filter(isDashboardEligibleRow);
-    adaptedRows.push(...report.reconciliationRows.filter(isDashboardEligibleRow));
+    const reportRows = report.rows;
+    adaptedRows.push(...report.reconciliationRows);
     reportSummaries = { monthly: report.monthlySummary, orders: report.orderSummary };
     const sourceStatus: PerSourceStatus = {
       ...report.sourceStatus,
@@ -233,7 +237,8 @@ export async function runConsolidation(
   // then remove dashboard-only exclusions from the published snapshot.
   const publishedRows = opts.config.report_source === undefined
     ? normalizedRows
-    : normalizedRows.filter((row) => !isExcludedReportOrder(row.order_code));
+    : normalizedRows.filter((row) =>
+        isPublishedReportRow(row) && !isExcludedReportOrder(row.order_code));
   if (opts.config.report_source !== undefined) {
     for (const row of normalizedRows) {
       if (isExcludedReportOrder(row.order_code) && !excludedOrderCodes.includes(row.order_code)) {
@@ -292,6 +297,16 @@ export async function runConsolidation(
     audit_findings_inserted: writeResult.audit_findings_inserted,
     refresh_id: writeResult.refresh_id,
   };
+}
+
+function isPublishedReportRow(row: NormalizedRow): boolean {
+  return row.is_done
+    && row.invoice_date !== null
+    && row.invoice_date >= '2026-01-01'
+    && row.invoice_date < '2027-01-01'
+    && row.invoice_month !== null
+    && row.invoice_month >= DASHBOARD_REPORTING_START_MONTH
+    && row.invoice_month < DASHBOARD_REPORTING_END_MONTH;
 }
 
 /**

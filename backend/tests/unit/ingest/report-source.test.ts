@@ -82,7 +82,7 @@ describe('readReportSource', () => {
     expect(row).toMatchObject({ savings_eur: 0, source_mode: 'legacy' });
   });
 
-  it('reads only included 2026 rows with raw savings precision and raw summaries', async () => {
+  it('reads February onward for publication while retaining January for reconciliation', async () => {
     const { gws } = reportFixture();
     const calls: Array<{ tab: string; option: string | undefined }> = [];
     const original = gws.pullSheetRange.bind(gws);
@@ -94,16 +94,16 @@ describe('readReportSource', () => {
     const batch = await readReportSource(REPORT_CONFIG, gws);
 
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
-    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
-    expect(batch.rows[0]?.invoice_date).toBe('2026-01-15');
-    expect(batch.rows[0]?.reporting_month).toBe('2026-01');
-    expect(batch.rows[0]?.savings_eur).toBe(10.005);
-    expect(batch.rows[2]).toMatchObject({
+    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-B']);
+    expect(batch.reconciliationRows[0]?.invoice_date).toBe('2026-01-15');
+    expect(batch.reconciliationRows[0]?.reporting_month).toBe('2026-01');
+    expect(batch.reconciliationRows[0]?.savings_eur).toBe(10.005);
+    expect(batch.rows[1]).toMatchObject({
       order_code: 'ORDER-B',
       tab_name: 'July 2026',
       row_index: 5,
     });
-    expect(batch.rows[0]).toMatchObject({
+    expect(batch.reconciliationRows[0]).toMatchObject({
       status: 'Done',
       currency: 'EUR',
       invoice_status: 'Paid',
@@ -112,7 +112,7 @@ describe('readReportSource', () => {
       source_mode: 'report',
       live_url: 'https://alpha.example/article-a',
     });
-    expect(batch.rows[0]?.source_row_key).toBe(sourceRowKey(
+    expect(batch.reconciliationRows[0]?.source_row_key).toBe(sourceRowKey(
       'REPORT_2026',
       'Clean Data',
       4,
@@ -126,7 +126,7 @@ describe('readReportSource', () => {
       spreadsheet_id: 'REPORT_2026',
       order_code: '2026 Spending Report',
       status: 'success',
-      rows_pulled: 3,
+      rows_pulled: 2,
     });
     expect(calls).toEqual([
       { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
@@ -144,7 +144,7 @@ describe('readReportSource', () => {
 
     const batch = await readReportSource(REPORT_CONFIG, gws);
 
-    expect(batch.rows[0]?.savings_eur).toBe(0);
+    expect(batch.reconciliationRows[0]?.savings_eur).toBe(0);
   });
 
   it('excludes LiveSportsOdds from report ingestion', async () => {
@@ -202,8 +202,23 @@ describe('readReportSource', () => {
     const invalidSavings = reportFixture((clean) => { clean.unformatted_rows![3]![12] = 'Infinity'; });
     await expect(readReportSource(REPORT_CONFIG, invalidSavings.gws)).rejects.toThrow('invalid Saving (EUR)');
 
-    const invalidMonth = reportFixture((clean) => { clean.rows[3]![4] = 'February 2025'; });
-    await expect(readReportSource(REPORT_CONFIG, invalidMonth.gws)).rejects.toThrow('invalid 2026 reporting Month');
+    const invalidMonth = reportFixture((clean) => { clean.rows[3]![4] = 'not a month'; });
+    await expect(readReportSource(REPORT_CONFIG, invalidMonth.gws)).rejects.toThrow('invalid reporting Month');
+  });
+
+  it('retains a December invoice remapped to January for reconciliation only', async () => {
+    const shifted = reportFixture((clean) => {
+      setPairedCell(clean, 3, 3, '15/12/2025');
+      setPairedCell(clean, 3, 4, 'January 2026');
+    });
+
+    const batch = await readReportSource(REPORT_CONFIG, shifted.gws);
+
+    expect(batch.reconciliationRows[0]).toMatchObject({
+      invoice_date: '2025-12-15',
+      reporting_month: '2026-01',
+    });
+    expect(batch.rows.some((row) => row.reporting_month === '2026-01')).toBe(false);
   });
 
   it('keeps an explicit source-tab reporting month even when the invoice date is in another month', async () => {

@@ -7,6 +7,8 @@ import type { RawRow } from './gws.js';
 const TOLERANCE = 0.0051;
 const START = '2026-01-01';
 const END = '2027-01-01';
+const START_MONTH = '2026-01';
+const END_MONTH = '2027-01';
 
 type Aggregate = { spend: number; savings: number };
 type OrderAggregate = Aggregate & { months: Map<string, number> };
@@ -212,7 +214,7 @@ function normalizeSheetMonth(value: string, rowIndex: number): string {
 
 function isEligible2026NormalizedRow(row: NormalizedRow): boolean {
   return row.is_done && row.invoice_date !== null && row.invoice_month !== null &&
-    row.invoice_date >= START && row.invoice_date < END;
+    row.invoice_month >= START_MONTH && row.invoice_month < END_MONTH;
 }
 
 function rawReportSpend(row: NormalizedRow): number {

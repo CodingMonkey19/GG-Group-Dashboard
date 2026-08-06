@@ -7,8 +7,12 @@
  * reconciliation and pipeline wiring are separate checkpoints.
  */
 
-import type { ReportSourceConfig } from '../../shared/contracts.js';
-import type { PerSourceStatus } from '../../shared/contracts.js';
+import {
+  DASHBOARD_REPORTING_END_MONTH,
+  DASHBOARD_REPORTING_START_MONTH,
+  type PerSourceStatus,
+  type ReportSourceConfig,
+} from '../../shared/contracts.js';
 import {
   detectNumericDateOrder,
   parseDateCell,
@@ -101,7 +105,15 @@ export async function readReportSource(
     if (invoiceDate === null) {
       throw rowError(formatted, 'included row has an invalid or missing Invoice Date');
     }
-    if (!isDashboardEligibleRow({ status: 'Done', invoice_date: invoiceDate })) continue;
+
+    const reportingMonth = parseReportingMonth(formattedCell(formatted, columns.reporting_month));
+    if (reportingMonth === null) {
+      throw rowError(formatted, 'invalid reporting Month');
+    }
+    // Historical/future source rows are outside this report. A December 2025
+    // invoice remapped to January 2026 is intentionally retained for full
+    // workbook reconciliation, even though January is not published.
+    if (!reportingMonth.startsWith('2026-')) continue;
 
     const orderCode = formattedCell(formatted, columns.order).trim();
     if (orderCode.length === 0) throw rowError(formatted, 'included 2026 row has a blank Order');
@@ -123,11 +135,6 @@ export async function readReportSource(
     // no comparison price. Its summary formulas treat those cells as zero.
     const savings = rawSavings.trim().length === 0 ? 0 : parseRawMoney(rawSavings);
     if (savings === null) throw rowError(formatted, 'included 2026 row has invalid Saving (EUR)');
-
-    const reportingMonth = parseReportingMonth(formattedCell(formatted, columns.reporting_month));
-    if (reportingMonth === null || !reportingMonth.startsWith('2026-')) {
-      throw rowError(formatted, `invalid 2026 reporting Month`);
-    }
 
     const adapterRow: AdapterRow = {
       spreadsheet_id: config.spreadsheet_id,
@@ -160,7 +167,7 @@ export async function readReportSource(
       live_url: formattedCell(formatted, columns.live_url),
     };
     reconciliationRows.push(adapterRow);
-    if (!isExcludedReportOrder(orderCode)) rows.push(adapterRow);
+    if (isPublishedReportRow(adapterRow) && !isExcludedReportOrder(orderCode)) rows.push(adapterRow);
   }
 
   return {
@@ -175,6 +182,13 @@ export async function readReportSource(
       rows_pulled: rows.length,
     },
   };
+}
+
+function isPublishedReportRow(row: AdapterRow): boolean {
+  return isDashboardEligibleRow(row)
+    && row.reporting_month !== undefined
+    && row.reporting_month >= DASHBOARD_REPORTING_START_MONTH
+    && row.reporting_month < DASHBOARD_REPORTING_END_MONTH;
 }
 
 export function isExcludedReportOrder(value: string): boolean {
