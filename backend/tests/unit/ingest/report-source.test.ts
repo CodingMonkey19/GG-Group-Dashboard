@@ -222,10 +222,13 @@ describe('readReportSource', () => {
   });
 
   it('keeps an explicit source-tab reporting month even when the invoice date is in another month', async () => {
-    const monthTab = reportFixture((clean) => { clean.rows[3]![4] = 'July 2026'; });
+    const monthTab = reportFixture((clean) => {
+      setPairedCell(clean, 3, 3, '14/02/2027');
+      setPairedCell(clean, 3, 4, 'July 2026');
+    });
     const batch = await readReportSource(REPORT_CONFIG, monthTab.gws);
     expect(batch.rows[0]).toMatchObject({
-      invoice_date: '2026-01-15',
+      invoice_date: '2027-02-14',
       reporting_month: '2026-07',
     });
   });

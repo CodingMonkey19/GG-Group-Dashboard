@@ -86,7 +86,7 @@ describe('2026 reporting selectors', () => {
     });
     const shiftedToFebruary = row({
       source_row_key: '4444444444444444',
-      invoice_date: '2026-01-15',
+      invoice_date: '2027-01-15',
       invoice_month: '2026-02',
     });
     const from2025 = { ...row({ source_row_key: '1111111111111111' }), invoice_date: '2025-12-31', invoice_month: '2025-12' } as InvoiceRow;

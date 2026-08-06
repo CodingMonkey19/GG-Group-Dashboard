@@ -258,8 +258,8 @@ function assertSnapshotWriteInput(
     if (!Number.isFinite(row.savings_eur)) {
       throw new Error(`writeConsolidation: ${row.source_row_key} has non-finite savings_eur`);
     }
-    if (!isValidReportingDate(row.invoice_date)) {
-      throw new Error(`writeConsolidation: ${row.source_row_key} has invalid ${REPORTING_YEAR} invoice_date`);
+    if (!isValidInvoiceDate(row.invoice_date)) {
+      throw new Error(`writeConsolidation: ${row.source_row_key} has invalid invoice_date`);
     }
     if (typeof row.invoice_month !== 'string' || !/^2026-(0[1-9]|1[0-2])$/.test(row.invoice_month)) {
       throw new Error(`writeConsolidation: ${row.source_row_key} has invalid 2026 reporting month`);
@@ -267,8 +267,8 @@ function assertSnapshotWriteInput(
   }
 }
 
-function isValidReportingDate(value: string | null): value is string {
-  if (typeof value !== 'string' || !/^2026-\d{2}-\d{2}$/.test(value)) return false;
+function isValidInvoiceDate(value: string | null): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

@@ -105,7 +105,7 @@ export function readSnapshotMetadata(db: DatabaseT): SnapshotMetadata | null {
   }
 }
 
-/** Return true only when every persisted invoice is a finite, matching 2026 row. */
+/** Return true only when every persisted invoice has finite values and a valid report month. */
 export function snapshotInvoicesAreCompatible(db: DatabaseT): boolean {
   try {
     const rows = db.prepare(
@@ -118,7 +118,7 @@ export function snapshotInvoicesAreCompatible(db: DatabaseT): boolean {
     return rows.every((row) =>
       typeof row.savings_eur === 'number' &&
       Number.isFinite(row.savings_eur) &&
-      isReportingYearDate(row.invoice_date) &&
+      isIsoDate(row.invoice_date) &&
       typeof row.invoice_month === 'string' &&
       /^2026-(0[1-9]|1[0-2])$/.test(row.invoice_month),
     );
@@ -127,8 +127,8 @@ export function snapshotInvoicesAreCompatible(db: DatabaseT): boolean {
   }
 }
 
-function isReportingYearDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^2026-\d{2}-\d{2}$/.test(value)) return false;
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

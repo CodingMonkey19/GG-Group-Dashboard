@@ -302,8 +302,6 @@ export async function runConsolidation(
 function isPublishedReportRow(row: NormalizedRow): boolean {
   return row.is_done
     && row.invoice_date !== null
-    && row.invoice_date >= '2026-01-01'
-    && row.invoice_date < '2027-01-01'
     && row.invoice_month !== null
     && row.invoice_month >= DASHBOARD_REPORTING_START_MONTH
     && row.invoice_month < DASHBOARD_REPORTING_END_MONTH;

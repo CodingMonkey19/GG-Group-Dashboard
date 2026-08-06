@@ -21,9 +21,6 @@ import {
   DASHBOARD_REPORTING_START_MONTH,
 } from './contracts';
 
-const REPORTING_YEAR_START = '2026-01-01';
-const REPORTING_YEAR_END = '2027-01-01';
-
 export interface PaymentStatusBreakdown {
   paid: { spend_eur: number; count: number };
   unpaid: { spend_eur: number; count: number };
@@ -45,9 +42,7 @@ export interface ScopedTotal {
 /** True only for rows inside the dashboard's February–December 2026 reporting boundary. */
 export function isReportingYearRow(row: InvoiceRow): boolean {
   return (
-    row.invoice_date >= REPORTING_YEAR_START
-    && row.invoice_date < REPORTING_YEAR_END
-    && row.invoice_month >= DASHBOARD_REPORTING_START_MONTH
+    row.invoice_month >= DASHBOARD_REPORTING_START_MONTH
     && row.invoice_month < DASHBOARD_REPORTING_END_MONTH
   );
 }
@@ -645,13 +640,12 @@ export interface ScopedSummary {
 const NO_FUTURE_FILTER = '9999-12-31';
 
 /**
- * `true` when the row's invoice_date is on or before `today`. Used as a
- * guard inside scope/series/breakdown selectors so the dashboard never
- * shows future-dated work as if it had happened. Rows with `invoice_date
- * === null` (undated) are NOT future-dated — pass through.
+ * The executive report's Month field is authoritative. Source invoice dates
+ * can be outside 2026 after the workbook's explicit remapping, so only the
+ * reporting month is compared with today.
  */
 function isNotFutureDated(row: InvoiceRow, today: string): boolean {
-  return row.invoice_date === null || row.invoice_date <= today;
+  return row.invoice_month === null || row.invoice_month <= today.slice(0, 7);
 }
 
 /**

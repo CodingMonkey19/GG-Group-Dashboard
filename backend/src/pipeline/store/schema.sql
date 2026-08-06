@@ -56,9 +56,10 @@ CREATE TABLE IF NOT EXISTS invoices (
                           'converted','missing_price','unparseable_amount',
                           'missing_currency','out_of_ecb_currency'
                         )),
-  invoice_date        TEXT    NOT NULL CHECK (
-                          invoice_date >= '2026-01-01' AND invoice_date < '2027-01-01'
-                        ),
+  -- Source invoice date is retained for provenance. Reporting scope is
+  -- governed by invoice_month because the executive report explicitly
+  -- remaps source dates into its 2026 reporting buckets.
+  invoice_date        TEXT    NOT NULL CHECK (invoice_date GLOB '????-??-??'),
   invoice_month       TEXT    NOT NULL CHECK (
                           invoice_month GLOB '2026-0[1-9]'
                           OR invoice_month GLOB '2026-1[0-2]'

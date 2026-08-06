@@ -372,13 +372,6 @@ export const ApiDataResponse = z
   .superRefine((response, ctx) => {
     for (let index = 0; index < response.invoices.length; index += 1) {
       const invoice = response.invoices[index]!;
-      if (!invoice.invoice_date.startsWith(`${REPORTING_YEAR}-`)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['invoices', index, 'invoice_date'],
-          message: `invoice_date must be within ${REPORTING_YEAR}`,
-        });
-      }
       if (
         invoice.invoice_month < DASHBOARD_REPORTING_START_MONTH
         || invoice.invoice_month >= DASHBOARD_REPORTING_END_MONTH

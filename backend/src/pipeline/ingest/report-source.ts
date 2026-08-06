@@ -18,7 +18,6 @@ import {
   parseDateCell,
   type NumericDateOrder,
 } from '../normalize/date-resolution.js';
-import { isDashboardEligibleRow } from '../normalize/index.js';
 import { sourceRowKey } from '../normalize/source-row-key.js';
 import type { AdapterRow } from './sheet-adapter.js';
 import type { GwsWrapper, RawRow } from './gws.js';
@@ -185,8 +184,7 @@ export async function readReportSource(
 }
 
 function isPublishedReportRow(row: AdapterRow): boolean {
-  return isDashboardEligibleRow(row)
-    && row.reporting_month !== undefined
+  return row.reporting_month !== undefined
     && row.reporting_month >= DASHBOARD_REPORTING_START_MONTH
     && row.reporting_month < DASHBOARD_REPORTING_END_MONTH;
 }

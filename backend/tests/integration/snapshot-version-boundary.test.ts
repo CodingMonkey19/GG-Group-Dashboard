@@ -217,7 +217,7 @@ describe('v2 snapshot API boundaries', () => {
       });
       seedInvoice(db, {
         source_row_key: '0000000000000020',
-        invoice_date: '2026-01-20',
+        invoice_date: '2027-01-20',
         invoice_month: '2026-02',
       });
     } finally {
@@ -233,7 +233,7 @@ describe('v2 snapshot API boundaries', () => {
       expect(body.invoices).toHaveLength(1);
       expect(body.invoices[0]).toMatchObject({
         source_row_key: '0000000000000020',
-        invoice_date: '2026-01-20',
+        invoice_date: '2027-01-20',
         invoice_month: '2026-02',
       });
     } finally {
