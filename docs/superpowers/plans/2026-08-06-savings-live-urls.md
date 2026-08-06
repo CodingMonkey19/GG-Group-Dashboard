@@ -86,10 +86,10 @@
 - Modify: `/Users/fared/.Codex/primer.md`
 
 - [x] Run the backend and frontend verification suites and production builds.
-- [ ] Confirm totals remain identical to the current source-backed Feb–Jul snapshot.
-- [ ] Confirm January and LiveSportsOdds are absent.
-- [ ] Commit and push the implementation to `origin/main`.
-- [ ] Back up the live snapshot, rebuild the container, and re-consolidate from the Google Sheet.
-- [ ] Verify the live API contains the new fields and preserves all approved totals.
-- [ ] Check the live dashboard views and controls in the browser.
-- [ ] Update the handoff primer with the exact deployed state.
+- [x] Confirm totals remain identical to the current source-backed Feb–Jul snapshot.
+- [x] Confirm January and LiveSportsOdds are absent.
+- [x] Commit and push the implementation to `origin/main`.
+- [x] Back up the live snapshot, rebuild the container, and re-consolidate from the Google Sheet.
+- [x] Verify the live API contains the new fields and preserves all approved totals.
+- [x] Check the live dashboard views and controls in the browser.
+- [x] Update the handoff primer with the exact deployed state.
