@@ -7,8 +7,10 @@ function row(source_row_key: string, month: string, amount: number | null, statu
     source_row_key, invoice_id: null, order_code: 'CGLT', spreadsheet_id: 's1', tab_name: month,
     tab_name_raw: month, row_index: 2, work_status: is_done ? 'Done' : 'In Progress', is_done,
     payment_status: status, invoice_type: 'pdf', artifact_ref: 'inv.pdf', artifact_status: 'reachable',
-    website: 'a.com', website_raw: 'a.com', native_amount: amount, native_currency: 'EUR',
-    eur_amount: amount, savings_eur: amount === null ? 0 : amount / 10, ecb_rate: 1,
+    website: 'a.com', website_raw: 'a.com', target_url: null, anchor_text: null,
+    native_amount: amount, native_currency: 'EUR', eur_amount: amount,
+    presswhizz_price_eur: amount === null ? null : amount * 1.1,
+    savings_eur: amount === null ? 0 : amount / 10, ecb_rate: 1,
     ecb_rate_as_of: `${month}-01`, conversion_status: amount === null ? 'out_of_ecb_currency' : 'converted',
     invoice_date: `${month}-15`, invoice_month: month, date_source: 'sheet', audit_flags: [],
   };
@@ -16,7 +18,7 @@ function row(source_row_key: string, month: string, amount: number | null, statu
 
 function envelope(invoices: InvoiceRow[]): ApiDataResponse {
   return {
-    schema_version: 2, reporting_year: 2026, last_refreshed_at: '2026-05-12T10:00:00Z',
+    schema_version: 3, reporting_year: 2026, last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success', duration_ms: 0, per_source: [],
     counters: { rows_total: invoices.length, rows_done: invoices.filter((invoice) => invoice.is_done).length, rows_excluded_by_status: invoices.filter((invoice) => !invoice.is_done).length, rows_undated: 0, rows_out_of_ecb_currency: 0, duplicate_invoice_groups: 0 },
     excluded_order_codes: [], invoices,

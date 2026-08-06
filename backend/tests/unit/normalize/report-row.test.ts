@@ -10,6 +10,7 @@ function reportRow(invoice_url: string): AdapterRow {
     tab_name_raw: 'Clean Data', row_index: 2, source_row_key: '0000000000000001',
     status: 'Done', website: 'example.com', price: '100', currency: 'EUR',
     invoice_date: '2026-01-15', invoice_url, invoice_status: 'Paid', savings_eur: 10.005,
+    presswhizz_price_eur: 150,
     source_mode: 'report', data_quality_issue: undefined, link_builder: undefined,
     target_url: undefined, anchor: undefined, live_url: undefined,
   };

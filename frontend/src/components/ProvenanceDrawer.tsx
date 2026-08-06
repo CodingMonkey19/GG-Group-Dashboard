@@ -24,7 +24,6 @@
 import { useEffect } from 'react';
 import type { InvoiceRow } from '../lib/contracts';
 import { dayLabel } from '../lib/format';
-import { artifactUrl } from '../lib/artifacts';
 import { fmtEur, fmtEurDec, fmtNum } from '../lib/format';
 
 interface Props {
@@ -85,7 +84,6 @@ export function ProvenanceDrawer({ title, rows, onClose }: Props): JSX.Element {
 }
 
 function ProvenanceRow({ row }: { row: InvoiceRow }): JSX.Element {
-  const link = artifactUrl(row);
   const isAuditOnly = row.conversion_status !== 'converted';
   return (
     <li className={`provenance-row ${isAuditOnly ? 'provenance-row--audit' : ''}`}>
@@ -105,90 +103,49 @@ function ProvenanceRow({ row }: { row: InvoiceRow }): JSX.Element {
         <span className={`provenance-row__status provenance-row__status--${row.payment_status}`}>
           {row.payment_status}
         </span>
-        <span className={`provenance-row__type provenance-row__type--${row.invoice_type}`}>
-          {row.invoice_type}
-        </span>
       </div>
       <dl className="provenance-row__fields">
-        <dt>Sheet</dt>
-        <dd>
-          <code>{row.spreadsheet_id}</code> · {row.tab_name_raw} · row {row.row_index}
-        </dd>
-        <dt>Source row key</dt>
-        <dd><code>{row.source_row_key}</code></dd>
         <dt>Order</dt>
         <dd>{row.order_code}</dd>
         <dt>Website</dt>
         <dd>{row.website ?? '—'}</dd>
-        <dt>Native</dt>
-        <dd>
-          {row.native_amount !== null && row.native_currency !== null
-            ? `${row.native_amount.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })} ${row.native_currency}`
-            : '—'}
-        </dd>
-        <dt>ECB rate</dt>
-        <dd>
-          {row.ecb_rate !== null
-            ? `${row.ecb_rate} ${row.native_currency ?? ''}/EUR (as of ${dayLabel(row.ecb_rate_as_of)})`
-            : '—'}
-        </dd>
+        <dt>Anchor text</dt>
+        <dd>{row.anchor_text ?? '—'}</dd>
+        <dt>Target URL</dt>
+        <dd>{renderExternalLink(row.target_url, 'Open target page')}</dd>
+        <dt>Live link</dt>
+        <dd>{renderExternalLink(row.live_url, 'Open live link')}</dd>
         <dt>Invoice date</dt>
         <dd>{row.invoice_date ? dayLabel(row.invoice_date) : `Undated (date_source=${row.date_source})`}</dd>
-        <dt>Spend</dt>
+        <dt>Our price</dt>
         <dd>{row.eur_amount !== null ? fmtEur(row.eur_amount) : '—'}</dd>
-        <dt>Savings</dt>
+        <dt>PressWhizz price</dt>
+        <dd>{row.presswhizz_price_eur === null ? '—' : fmtEur(row.presswhizz_price_eur)}</dd>
+        <dt>Saved</dt>
         <dd>{fmtEur(row.savings_eur)}</dd>
-        <dt>Artifact</dt>
-        <dd>
-          {renderArtifactCell(row, link)}
-        </dd>
-        {row.audit_flags.length > 0 && (
-          <>
-            <dt>Audit flags</dt>
-            <dd>
-              {row.audit_flags.map((flag, i) => (
-                <span key={`${flag}-${i}`} className="provenance-row__flag">{flag}</span>
-              ))}
-            </dd>
-          </>
-        )}
       </dl>
     </li>
   );
 }
 
-function renderArtifactCell(row: InvoiceRow, link: string | null): JSX.Element {
-  if (row.invoice_type === 'text') {
-    return <span className="provenance-row__text-note">{row.artifact_ref ?? '—'}</span>;
+function renderExternalLink(value: string | null | undefined, label: string): JSX.Element {
+  if (value == null || value.trim().length === 0) return <span>—</span>;
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  let href: string | null = null;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') href = candidate;
+  } catch {
+    href = null;
   }
-  if (row.invoice_type === 'missing') {
-    return (
-      <span
-        className="provenance-row__missing"
-        title="No artifact attached. See Audit → missing_invoice_url."
-      >
-        no artifact
-      </span>
-    );
-  }
-  if (link === null) {
-    return <span>—</span>;
-  }
-  const label =
-    row.invoice_type === 'pdf'
-      ? `Open PDF (${row.artifact_status})`
-      : row.invoice_type === 'drive_pdf'
-        ? `Open Drive PDF (${row.artifact_status})`
-        : `Open ${row.invoice_type}`;
+  if (href === null) return <span>{value}</span>;
   return (
     <a
-      href={link}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="provenance-row__link"
+      title={value}
     >
       {label}
     </a>

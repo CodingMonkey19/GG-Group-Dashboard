@@ -134,6 +134,13 @@ export async function readReportSource(
     // no comparison price. Its summary formulas treat those cells as zero.
     const savings = rawSavings.trim().length === 0 ? 0 : parseRawMoney(rawSavings);
     if (savings === null) throw rowError(formatted, 'included 2026 row has invalid Saving (EUR)');
+    const rawPressWhizzPrice = unformattedCell(unformatted, columns.presswhizz_price_eur);
+    const pressWhizzPrice = rawPressWhizzPrice.trim().length === 0
+      ? null
+      : parseRawMoney(rawPressWhizzPrice);
+    if (rawPressWhizzPrice.trim().length > 0 && pressWhizzPrice === null) {
+      throw rowError(formatted, 'included 2026 row has invalid PressWhizz Price (EUR)');
+    }
 
     const adapterRow: AdapterRow = {
       spreadsheet_id: config.spreadsheet_id,
@@ -158,11 +165,12 @@ export async function readReportSource(
       invoice_url: formattedCell(formatted, columns.invoice_url),
       invoice_status: formattedCell(formatted, columns.invoice_status),
       savings_eur: savings,
+      presswhizz_price_eur: pressWhizzPrice,
       source_mode: 'report',
       data_quality_issue: formattedCell(formatted, columns.data_quality_issue),
       link_builder: formattedCell(formatted, columns.link_builder),
-      target_url: undefined,
-      anchor: undefined,
+      target_url: formattedCell(formatted, columns.target_url),
+      anchor: formattedCell(formatted, columns.anchor),
       live_url: formattedCell(formatted, columns.live_url),
     };
     reconciliationRows.push(adapterRow);

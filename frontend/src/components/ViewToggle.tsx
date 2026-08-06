@@ -1,11 +1,8 @@
 /**
- * ViewToggle — switches the dashboard between Spend (US1+US2+US3) and
- * Websites (US4). Audit was removed per operator request: data-quality
- * findings are technical and reviewed by the developer separately, not
- * exposed in the CEO dashboard.
+ * ViewToggle — switches between the executive Spend, Savings, and Live URLs views.
  */
 
-export type View = 'spend' | 'websites';
+export type View = 'spend' | 'savings' | 'websites';
 
 interface Props {
   value: View;
@@ -14,6 +11,7 @@ interface Props {
 
 const views: Array<{ id: View; label: string }> = [
   { id: 'spend', label: 'Spend' },
+  { id: 'savings', label: 'Savings' },
   { id: 'websites', label: 'Live URLs' },
 ];
 

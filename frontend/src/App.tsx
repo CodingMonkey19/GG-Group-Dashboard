@@ -18,15 +18,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, fetchData, subscribeRefresh } from './lib/api';
 import type { ApiDataResponse, InvoiceRow } from './lib/contracts';
 import {
+  completedRowsInScope,
   distinctOrderCodes,
   drillRowsForScope,
-  drillRowsForWebsite,
+  liveUrlRowsInScope,
   MIN_VISIBLE_YEAR_ROWS,
   monthlyBreakdowns,
   monthsInYear,
   rowsDoneSeries,
+  savingsBreakdowns,
+  savingsByOrder,
+  savingsInScope,
   spendInScope,
-  websiteCurrentPrices,
   type MonthBreakdown,
   type SpendScope,
 } from './lib/selectors';
@@ -46,15 +49,16 @@ import {
 import { DonutChart } from './components/DonutChart';
 import { KpiCard, type KpiComparison } from './components/KpiCard';
 import { LineChart } from './components/LineChart';
+import { LiveUrlsTable } from './components/LiveUrlsTable';
 import { MonthSelector } from './components/MonthSelector';
 import { OrderFilter } from './components/OrderFilter';
 import { Panel } from './components/Panel';
 import { ProvenanceDrawer } from './components/ProvenanceDrawer';
 import { RankedBars } from './components/RankedBars';
 import { ScopeToggle, type Scope } from './components/ScopeToggle';
+import { SavingsTable } from './components/SavingsTable';
 import { StackedBars } from './components/StackedBars';
 import { ViewToggle, type View } from './components/ViewToggle';
-import { WebsiteTable } from './components/WebsiteTable';
 
 const REPORTING_YEAR = '2026';
 
@@ -225,10 +229,10 @@ export function App(): JSX.Element {
               months={monthOptions}
               value={selectedMonth}
               onChange={setMonth}
-              disabled={scope === 'year'}
+              disabled={view !== 'websites' && scope === 'year'}
             />
             <OrderFilter orders={orders} value={order} onChange={setOrder} />
-            {view === 'spend' && (
+            {view !== 'websites' && (
               <CompareSelector
                 months={monthOptions}
                 currentMonth={selectedMonth}
@@ -270,7 +274,7 @@ export function App(): JSX.Element {
       {data !== null && (
         <div className="view-toggle-row">
           <ViewToggle value={view} onChange={setView} />
-          {view === 'spend' && <ScopeToggle value={scope} onChange={setScope} />}
+          {view !== 'websites' && <ScopeToggle value={scope} onChange={setScope} />}
         </div>
       )}
 
@@ -372,7 +376,29 @@ function renderMain({
 
     case 'ready': {
       if (view === 'websites') {
-        return <WebsitesContent data={state.data} today={today} onDrillDown={onDrillDown} />;
+        return (
+          <WebsitesContent
+            data={state.data}
+            month={month}
+            order={order}
+            today={today}
+            onDrillDown={onDrillDown}
+          />
+        );
+      }
+      if (view === 'savings') {
+        return (
+          <SavingsView
+            data={state.data}
+            scopeMode={scope}
+            month={month}
+            compareMonth={compareMonth}
+            order={order}
+            today={today}
+            refreshError={refreshError}
+            onDrillDown={onDrillDown}
+          />
+        );
       }
       return (
         <SpendView
@@ -416,6 +442,27 @@ function buildKpiComparison(
     delta: `${signedAmount} · ${percentLabel}`,
     direction,
     tone,
+  };
+}
+
+function buildRateComparison(
+  label: string,
+  current: number | null,
+  baseline: number | null,
+): KpiComparison | undefined {
+  if (current === null || baseline === null) return undefined;
+  const changePoints = (current - baseline) * 100;
+  const direction: KpiComparison['direction'] = changePoints > 0
+    ? 'up'
+    : changePoints < 0
+      ? 'down'
+      : 'flat';
+  return {
+    label: `vs ${label}`,
+    value: `${(baseline * 100).toFixed(1)}%`,
+    delta: `${changePoints > 0 ? '+' : ''}${changePoints.toFixed(1)} pts`,
+    direction,
+    tone: 'favorable',
   };
 }
 
@@ -663,41 +710,241 @@ function SpendView({
 }
 
 /* ----------------------------------------------------------------------- */
-/* WebsitesContent + AuditContent — keep existing drill-down flow.           */
+/* SavingsView — link-level source savings with executive totals.             */
+/* ----------------------------------------------------------------------- */
+
+interface SavingsViewProps {
+  data: ApiDataResponse;
+  scopeMode: Scope;
+  month: string;
+  compareMonth: string | null;
+  order: string | null;
+  today: string;
+  refreshError: string | null;
+  onDrillDown: (d: DrawerState) => void;
+}
+
+function SavingsView({
+  data,
+  scopeMode,
+  month,
+  compareMonth,
+  order,
+  today,
+  refreshError,
+  onDrillDown,
+}: SavingsViewProps): JSX.Element {
+  const scope: SpendScope = {
+    year: REPORTING_YEAR,
+    month: scopeMode === 'year' ? 'all' : month,
+    orderCode: order,
+  };
+  const comparisonScope: SpendScope | null = compareMonth === null
+    ? null
+    : { year: REPORTING_YEAR, month: compareMonth, orderCode: order };
+  const summary = useMemo(
+    () => savingsInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, scope.year, scope.month, scope.orderCode, today],
+  );
+  const comparisonSummary = useMemo(
+    () => comparisonScope === null
+      ? null
+      : savingsInScope(data, comparisonScope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
+  );
+  const breakdowns = useMemo(
+    () => savingsBreakdowns(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, scope.year, scope.month, scope.orderCode, today],
+  );
+  const comparisonBreakdowns = useMemo(
+    () => comparisonScope === null
+      ? []
+      : savingsBreakdowns(data, comparisonScope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
+  );
+  const chartBreakdowns = useMemo(() => {
+    if (compareMonth === null || scopeMode === 'year') return breakdowns;
+    const currentKey = `${REPORTING_YEAR}-${month}`;
+    const comparisonKey = `${REPORTING_YEAR}-${compareMonth}`;
+    const byMonth = new Map<string, MonthBreakdown>();
+    for (const item of [...comparisonBreakdowns, ...breakdowns]) byMonth.set(item.m, item);
+    return [comparisonKey, currentKey]
+      .sort()
+      .map((key) => byMonth.get(key) ?? { m: key, total: 0, byProject: [] });
+  }, [breakdowns, comparisonBreakdowns, compareMonth, month, scopeMode]);
+  const ranked = useMemo(
+    () => savingsByOrder(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, scope.year, scope.month, scope.orderCode, today],
+  );
+  const rows = useMemo(
+    () => completedRowsInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, scope.year, scope.month, scope.orderCode, today],
+  );
+
+  const periodLabel = scopeMode === 'year'
+    ? 'Feb–Dec 2026'
+    : scopeLabelFor({ year: REPORTING_YEAR, month });
+  const scopeLabel = order === null ? periodLabel : `${order} · ${periodLabel}`;
+  const comparisonLabel = compareMonth === null
+    ? null
+    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth });
+  const comparisonFor = (
+    current: number,
+    baseline: number | undefined,
+    tone: KpiComparison['tone'],
+  ): KpiComparison | undefined => comparisonLabel === null || baseline === undefined
+    ? undefined
+    : buildKpiComparison(comparisonLabel, current, baseline, tone);
+  const allRowsTitle = `${scopeLabel} — completed links`;
+  const openAllRows = (): void => onDrillDown({ title: allRowsTitle, rows });
+  const savedComparison = comparisonFor(summary.saved_eur, comparisonSummary?.saved_eur, 'favorable');
+  const pressWhizzComparison = comparisonFor(
+    summary.presswhizz_eur,
+    comparisonSummary?.presswhizz_eur,
+    'neutral',
+  );
+  const ourPriceComparison = comparisonFor(
+    summary.our_price_eur,
+    comparisonSummary?.our_price_eur,
+    'neutral',
+  );
+  const rateComparison = comparisonLabel === null || comparisonSummary === null
+    ? undefined
+    : buildRateComparison(comparisonLabel, summary.saving_rate, comparisonSummary.saving_rate);
+
+  return (
+    <>
+      <Briefing
+        eyebrow={`SAVINGS · ${scopeLabel.toUpperCase()}`}
+        title={`${scopeLabel} savings impact`}
+        lede={`${fmtNum(summary.count)} completed links saved ${fmtEur(summary.saved_eur)} against the PressWhizz comparison prices supplied by the source report.`}
+      />
+
+      {refreshError !== null && (
+        <div className="empty-state" role="alert">
+          <h2>Refresh error</h2>
+          <p>{refreshError}</p>
+        </div>
+      )}
+
+      <section className="savings-hero" aria-label={`${scopeLabel} savings totals`}>
+        <KpiCard
+          label="Total Saved"
+          accent="paid"
+          tooltip="Supplied Saving (EUR), summed for the selected completed links."
+          value={fmtEur(summary.saved_eur)}
+          sub={scopeLabel}
+          {...(savedComparison === undefined ? {} : { comparison: savedComparison })}
+          onClick={openAllRows}
+        />
+        <KpiCard
+          label="PressWhizz Equivalent"
+          tooltip="Supplied PressWhizz Price (EUR); blank comparison cells are not estimated."
+          value={fmtEur(summary.presswhizz_eur)}
+          sub={`${fmtNum(summary.presswhizz_count)} priced links`}
+          {...(pressWhizzComparison === undefined ? {} : { comparison: pressWhizzComparison })}
+          onClick={openAllRows}
+        />
+        <KpiCard
+          label="Our Price"
+          tooltip="The source report's Price (EUR) for the same completed links."
+          value={fmtEur(summary.our_price_eur)}
+          sub={scopeLabel}
+          {...(ourPriceComparison === undefined ? {} : { comparison: ourPriceComparison })}
+          onClick={openAllRows}
+        />
+        <KpiCard
+          label="Saving Rate"
+          accent="paid"
+          tooltip="Total supplied savings divided by total supplied PressWhizz price."
+          value={summary.saving_rate === null ? '—' : `${(summary.saving_rate * 100).toFixed(1)}%`}
+          sub="of PressWhizz equivalent"
+          {...(rateComparison === undefined ? {} : { comparison: rateComparison })}
+          onClick={openAllRows}
+        />
+      </section>
+
+      <section className="grid-2">
+        <Panel
+          title="Savings by month"
+          subtitle={comparisonLabel === null ? `EUR · ${scopeLabel}` : `EUR · ${periodLabel} vs ${comparisonLabel}`}
+          {...(comparisonLabel === null ? {} : {
+            legend: [
+              { label: periodLabel, cls: 'legend__dot--current' },
+              { label: comparisonLabel, cls: 'legend__dot--comparison' },
+            ],
+          })}
+        >
+          <StackedBars
+            data={chartBreakdowns}
+            currentMonth={scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
+            comparisonMonth={compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
+          />
+        </Panel>
+        <Panel title="Savings by order" subtitle={`${fmtNum(ranked.length)} orders · ${scopeLabel}`}>
+          <RankedBars
+            rows={ranked.map((item) => ({
+              label: item.code,
+              value: item.eur,
+              sub: `${fmtNum(item.rows)} links`,
+            }))}
+            accent="blue"
+            formatValue={fmtEur}
+          />
+        </Panel>
+      </section>
+
+      <Panel title="Savings by completed link" subtitle={`${fmtNum(rows.length)} links · ${scopeLabel}`}>
+        <SavingsTable
+          rows={rows}
+          onDrillDown={(row) => onDrillDown({
+            title: `${row.website ?? 'Completed link'} — savings detail`,
+            rows: [row],
+          })}
+        />
+      </Panel>
+    </>
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* WebsitesContent — one completed live link per row.                        */
 /* ----------------------------------------------------------------------- */
 
 function WebsitesContent({
   data,
+  month,
+  order,
   today,
   onDrillDown,
 }: {
   data: ApiDataResponse;
+  month: string;
+  order: string | null;
   today: string;
   onDrillDown: (d: DrawerState) => void;
 }): JSX.Element {
+  const scope: SpendScope = { year: REPORTING_YEAR, month, orderCode: order };
   const rows = useMemo(
-    // requireLiveUrl=true → publishers whose latest dated row has no
-    // live URL value are dropped from the view (avoids showing a bare
-    // homepage as if it were a live URL).
-    () => websiteCurrentPrices(data, today, MIN_VISIBLE_YEAR_ROWS, true),
-    [data, today],
+    () => liveUrlRowsInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
+    [data, scope.year, scope.month, scope.orderCode, today],
   );
+  const periodLabel = scopeLabelFor({ year: REPORTING_YEAR, month });
+  const scopeLabel = order === null ? periodLabel : `${order} · ${periodLabel}`;
   return (
     <>
       <Briefing
-        eyebrow="LIVE URLS · CURRENT PRICES"
-        title="Per-link pricing"
-        lede="Most recent dated invoice per live URL, with history. Click any row to drill into its full invoice history; click a URL to open the article in a new tab."
+        eyebrow={`LIVE URLS · ${scopeLabel.toUpperCase()}`}
+        title="Completed live links"
+        lede="Target URL, anchor text, publisher, live article, source price, and invoice date for every completed link in the selected month and order."
       />
-      <Panel title="Live URLs" subtitle={`${fmtNum(rows.length)} tracked`}>
-        <WebsiteTable
+      <Panel title="Live URLs" subtitle={`${fmtNum(rows.length)} links · ${scopeLabel}`}>
+        <LiveUrlsTable
           rows={rows}
-          onDrillDown={(website) =>
-            onDrillDown({
-              title: `${website} — full invoice history`,
-              rows: drillRowsForWebsite(data, website, today, MIN_VISIBLE_YEAR_ROWS),
-            })
-          }
+          onDrillDown={(row) => onDrillDown({
+            title: `${row.website ?? 'Completed link'} — link detail`,
+            rows: [row],
+          })}
         />
       </Panel>
     </>

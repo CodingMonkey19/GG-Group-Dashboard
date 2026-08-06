@@ -33,9 +33,12 @@ function row(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     artifact_status: 'not_attempted',
     website: 'example.com',
     website_raw: 'example.com',
+    target_url: 'https://client.example/page',
+    anchor_text: 'example anchor',
     native_amount: 100,
     native_currency: 'EUR',
     eur_amount: 100,
+    presswhizz_price_eur: 125,
     savings_eur: 25,
     ecb_rate: 1,
     ecb_rate_as_of: '2026-04-15',
@@ -50,7 +53,7 @@ function row(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
 
 function data(invoices: InvoiceRow[]): ApiDataResponse {
   return {
-    schema_version: 2,
+    schema_version: 3,
     reporting_year: 2026,
     last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success',

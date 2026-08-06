@@ -72,7 +72,7 @@ function seedSnapshotMetadata(db: DatabaseT): void {
   db.prepare(
     `INSERT INTO snapshot_metadata (
        singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
-     ) VALUES (1, 2, 2026, 'REPORT_2026', 'Clean Data')`,
+     ) VALUES (1, 3, 2026, 'REPORT_2026', 'Clean Data')`,
   ).run();
 }
 

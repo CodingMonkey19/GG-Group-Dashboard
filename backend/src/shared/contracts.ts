@@ -149,7 +149,7 @@ export const REPORTING_YEAR = 2026 as const;
 export const DASHBOARD_REPORTING_START_MONTH = '2026-02' as const;
 export const DASHBOARD_REPORTING_END_MONTH = '2027-01' as const;
 /** Version of the published, 2026-only API/store snapshot contract. */
-export const API_SCHEMA_VERSION = 2 as const;
+export const API_SCHEMA_VERSION = 3 as const;
 
 export const ReportSourceHeaderMapping = z
   .object({
@@ -160,7 +160,10 @@ export const ReportSourceHeaderMapping = z
     reporting_month: z.string().min(1),
     link_builder: z.string().min(1),
     website: z.string().min(1),
+    target_url: z.string().min(1),
+    anchor: z.string().min(1),
     spend_eur: z.string().min(1),
+    presswhizz_price_eur: z.string().min(1),
     invoice_url: z.string().min(1),
     live_url: z.string().min(1),
     invoice_status: z.string().min(1),
@@ -254,6 +257,10 @@ export const InvoiceRow = z
     artifact_status: ArtifactStatus,
     website: z.string().min(1).nullable(),
     website_raw: z.string().nullable(),
+    /** Destination page the backlink points to. */
+    target_url: z.string().nullable(),
+    /** Backlink anchor text supplied by the source report. */
+    anchor_text: z.string().nullable(),
     /**
      * Column L on the standard order sheet — the URL where the published
      * backlink physically lives (the article on the publisher site).
@@ -266,7 +273,9 @@ export const InvoiceRow = z
     native_amount: z.number().nullable(),
     native_currency: z.string().min(3).max(3).nullable(),
     eur_amount: z.number().nullable(),
-    /** Raw EUR savings supplied by the source report; always finite in a v2 snapshot. */
+    /** Raw PressWhizz comparison price supplied by the source report. */
+    presswhizz_price_eur: z.number().finite().nullable(),
+    /** Raw EUR savings supplied by the source report; always finite in a v3 snapshot. */
     savings_eur: z.number().finite(),
     /** ECB-native: foreign currency units per 1 EUR. EUR rows store rate=1.0. */
     ecb_rate: z.number().positive().nullable(),

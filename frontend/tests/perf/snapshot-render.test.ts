@@ -26,8 +26,10 @@ function syntheticRow(i: number): InvoiceRow {
     work_status: i % 13 === 0 ? 'In Progress' : 'Done', is_done: i % 13 !== 0,
     payment_status: i % 5 === 0 ? 'paid' : i % 5 === 1 ? 'unpaid' : i % 5 === 2 ? 'unknown' : 'missing',
     invoice_type: 'paypal', artifact_ref: `https://example.com/inv/${i}`, artifact_status: 'reachable',
-    website: `site-${i % 8}.com`, website_raw: `site-${i % 8}.com`, native_amount: amount,
-    native_currency: 'EUR', eur_amount: amount, savings_eur: amount / 10, ecb_rate: 1,
+    website: `site-${i % 8}.com`, website_raw: `site-${i % 8}.com`,
+    target_url: `https://client.example/${i}`, anchor_text: `anchor ${i}`,
+    native_amount: amount, native_currency: 'EUR', eur_amount: amount,
+    presswhizz_price_eur: amount * 1.1, savings_eur: amount / 10, ecb_rate: 1,
     ecb_rate_as_of: `2026-${month}-${day}`, conversion_status: 'converted',
     invoice_date: `2026-${month}-${day}`, invoice_month: `2026-${month}`, date_source: 'sheet', audit_flags: [],
   };
@@ -35,7 +37,7 @@ function syntheticRow(i: number): InvoiceRow {
 
 function snapshot(invoices: InvoiceRow[]): ApiDataResponse {
   return {
-    schema_version: 2, reporting_year: 2026, last_refreshed_at: '2026-05-12T10:00:00Z',
+    schema_version: 3, reporting_year: 2026, last_refreshed_at: '2026-05-12T10:00:00Z',
     refresh_status: 'success', duration_ms: 1234, per_source: [],
     counters: { rows_total: invoices.length, rows_done: invoices.filter((invoice) => invoice.is_done).length, rows_excluded_by_status: invoices.filter((invoice) => !invoice.is_done).length, rows_undated: 0, rows_out_of_ecb_currency: 0, duplicate_invoice_groups: 0 },
     excluded_order_codes: [], invoices,

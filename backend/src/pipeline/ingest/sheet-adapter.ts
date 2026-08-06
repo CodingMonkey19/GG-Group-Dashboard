@@ -45,6 +45,8 @@ export interface AdapterRow {
   invoice_status: string | undefined;
   /** Raw EUR savings. Legacy sheets have no savings column and use zero. */
   savings_eur: number;
+  /** Raw PressWhizz comparison price. Blank or unavailable stays null. */
+  presswhizz_price_eur: number | null;
   /** Distinguishes legacy tab adapters from the executive report reader. */
   source_mode: 'report' | 'legacy';
   /** Optional executive-report issue text, retained for later audit mapping. */
@@ -106,6 +108,7 @@ export function adaptSheet(
         invoice_url: cell(m.invoice_url ?? null),
         invoice_status: cell(m.invoice_status ?? null),
         savings_eur: 0,
+        presswhizz_price_eur: null,
         source_mode: 'legacy',
         link_builder: cell(m.link_builder ?? null),
         target_url: cell(m.target_url ?? null),

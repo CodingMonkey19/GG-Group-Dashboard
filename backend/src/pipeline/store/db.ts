@@ -60,7 +60,7 @@ export interface SnapshotMetadata {
 }
 
 /**
- * Read and validate the v2 snapshot marker. A missing table, old
+ * Read and validate the v3 snapshot marker. A missing table, old
  * `user_version`, duplicate/absent singleton row, or malformed metadata is
  * incompatible rather than a candidate for best-effort migration.
  */
@@ -109,13 +109,25 @@ export function readSnapshotMetadata(db: DatabaseT): SnapshotMetadata | null {
 export function snapshotInvoicesAreCompatible(db: DatabaseT): boolean {
   try {
     const rows = db.prepare(
-      'SELECT savings_eur, invoice_date, invoice_month FROM invoices',
+      `SELECT target_url, anchor_text, live_url, presswhizz_price_eur,
+              savings_eur, invoice_date, invoice_month
+         FROM invoices`,
     ).all() as Array<{
+      target_url: unknown;
+      anchor_text: unknown;
+      live_url: unknown;
+      presswhizz_price_eur: unknown;
       savings_eur: unknown;
       invoice_date: unknown;
       invoice_month: unknown;
     }>;
     return rows.every((row) =>
+      (row.target_url === null || typeof row.target_url === 'string') &&
+      (row.anchor_text === null || typeof row.anchor_text === 'string') &&
+      (row.live_url === null || typeof row.live_url === 'string') &&
+      (row.presswhizz_price_eur === null || (
+        typeof row.presswhizz_price_eur === 'number' && Number.isFinite(row.presswhizz_price_eur)
+      )) &&
       typeof row.savings_eur === 'number' &&
       Number.isFinite(row.savings_eur) &&
       isIsoDate(row.invoice_date) &&

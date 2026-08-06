@@ -58,10 +58,13 @@ interface InvoiceDbRow {
   artifact_status: 'not_attempted' | 'reachable' | 'unreachable';
   website: string | null;
   website_raw: string | null;
+  target_url: string | null;
+  anchor_text: string | null;
   live_url: string | null;
   native_amount: number | null;
   native_currency: string | null;
   eur_amount: number | null;
+  presswhizz_price_eur: number | null;
   savings_eur: number;
   ecb_rate: number | null;
   ecb_rate_as_of: string | null;
@@ -89,7 +92,7 @@ interface AuditFindingDbRow {
 
 /**
  * The API is intentionally all-or-nothing: a store is ready only after its
- * v2 metadata and every invoice pass the 2026 boundary. No query filters a
+ * v3 metadata and every invoice pass the 2026 boundary. No query filters a
  * bad row out and returns the remainder as a seemingly valid snapshot.
  */
 export type SnapshotReadResult =
@@ -212,10 +215,13 @@ function toInvoiceRow(r: InvoiceDbRow): InvoiceRow {
     artifact_status: r.artifact_status,
     website: r.website,
     website_raw: r.website_raw,
+    target_url: r.target_url,
+    anchor_text: r.anchor_text,
     live_url: r.live_url,
     native_amount: r.native_amount,
     native_currency: r.native_currency,
     eur_amount: r.eur_amount,
+    presswhizz_price_eur: r.presswhizz_price_eur,
     savings_eur: r.savings_eur,
     ecb_rate: r.ecb_rate,
     ecb_rate_as_of: r.ecb_rate_as_of,

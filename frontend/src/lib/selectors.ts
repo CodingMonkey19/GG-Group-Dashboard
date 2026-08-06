@@ -624,6 +624,19 @@ export interface ScopedSummary {
   by_status: PaymentStatusBreakdown;
 }
 
+export interface SavingsSummary {
+  /** Supplied Saving (EUR), summed without recalculation. */
+  saved_eur: number;
+  /** Supplied PressWhizz Price (EUR), excluding blank source cells. */
+  presswhizz_eur: number;
+  /** Supplied Price (EUR), identical to spend for the same completed rows. */
+  our_price_eur: number;
+  /** Saved / PressWhizz price. Null when no usable PressWhizz price exists. */
+  saving_rate: number | null;
+  count: number;
+  presswhizz_count: number;
+}
+
 /**
  * Sentinel "no filter" for the optional `today` parameter on selectors
  * below. Callers that don't pass `today` get this value, which compares
@@ -771,6 +784,127 @@ export function spendInScope(
     count,
     by_status: byStatus,
   };
+}
+
+/** Completed, converted source rows for a selected dashboard scope. */
+export function completedRowsInScope(
+  data: ApiDataResponse,
+  scope: SpendScope,
+  today: string = NO_FUTURE_FILTER,
+  minRowsPerYear: number = 0,
+): InvoiceRow[] {
+  const noise = getNoiseYears(data, today, minRowsPerYear);
+  return data.invoices
+    .filter((row) => isAggregableInScope(row, scope, today, noise))
+    .sort((a, b) => {
+      if (a.invoice_date !== b.invoice_date) return a.invoice_date < b.invoice_date ? 1 : -1;
+      if (a.order_code !== b.order_code) return a.order_code < b.order_code ? -1 : 1;
+      if (a.row_index !== b.row_index) return a.row_index - b.row_index;
+      return a.source_row_key === b.source_row_key ? 0 : a.source_row_key < b.source_row_key ? -1 : 1;
+    });
+}
+
+/** Executive savings totals, using only values supplied by Clean Data. */
+export function savingsInScope(
+  data: ApiDataResponse,
+  scope: SpendScope,
+  today: string = NO_FUTURE_FILTER,
+  minRowsPerYear: number = 0,
+): SavingsSummary {
+  const rows = completedRowsInScope(data, scope, today, minRowsPerYear);
+  let saved = 0;
+  let presswhizz = 0;
+  let ourPrice = 0;
+  let presswhizzCount = 0;
+  for (const row of rows) {
+    saved += row.savings_eur;
+    ourPrice += row.eur_amount ?? 0;
+    if (row.presswhizz_price_eur !== null) {
+      presswhizz += row.presswhizz_price_eur;
+      presswhizzCount += 1;
+    }
+  }
+  const savedRounded = roundCurrency(saved);
+  const presswhizzRounded = roundCurrency(presswhizz);
+  return {
+    saved_eur: savedRounded,
+    presswhizz_eur: presswhizzRounded,
+    our_price_eur: roundCurrency(ourPrice),
+    saving_rate: presswhizzRounded === 0 ? null : savedRounded / presswhizzRounded,
+    count: rows.length,
+    presswhizz_count: presswhizzCount,
+  };
+}
+
+/** Savings by reporting month, shaped for the existing stacked chart. */
+export function savingsBreakdowns(
+  data: ApiDataResponse,
+  scope: SpendScope,
+  today: string = NO_FUTURE_FILTER,
+  minRowsPerYear: number = 0,
+): MonthBreakdown[] {
+  const rows = completedRowsInScope(data, scope, today, minRowsPerYear);
+  const orderTotals = new Map<string, number>();
+  const byMonth = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    orderTotals.set(row.order_code, (orderTotals.get(row.order_code) ?? 0) + row.savings_eur);
+    const bucket = byMonth.get(row.invoice_month) ?? new Map<string, number>();
+    bucket.set(row.order_code, (bucket.get(row.order_code) ?? 0) + row.savings_eur);
+    byMonth.set(row.invoice_month, bucket);
+  }
+  const rankedCodes = Array.from(orderTotals.entries())
+    .sort(([codeA, valueA], [codeB, valueB]) => {
+      if (valueA !== valueB) return valueB - valueA;
+      return codeA === codeB ? 0 : codeA < codeB ? -1 : 1;
+    })
+    .map(([code]) => code);
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1))
+    .map(([m, perOrder]) => {
+      const byProject = rankedCodes
+        .map((code) => ({ code, value: roundCurrency(perOrder.get(code) ?? 0) }))
+        .filter((item) => item.value !== 0);
+      return {
+        m,
+        total: roundCurrency(byProject.reduce((total, item) => total + item.value, 0)),
+        byProject,
+      };
+    });
+}
+
+/** Orders ranked by supplied savings within the selected scope. */
+export function savingsByOrder(
+  data: ApiDataResponse,
+  scope: SpendScope,
+  today: string = NO_FUTURE_FILTER,
+  minRowsPerYear: number = 0,
+): Array<{ code: string; eur: number; rows: number }> {
+  const totals = new Map<string, { eur: number; rows: number }>();
+  for (const row of completedRowsInScope(data, scope, today, minRowsPerYear)) {
+    const total = totals.get(row.order_code) ?? { eur: 0, rows: 0 };
+    total.eur += row.savings_eur;
+    total.rows += 1;
+    totals.set(row.order_code, total);
+  }
+  return Array.from(totals.entries())
+    .map(([code, total]) => ({ code, eur: roundCurrency(total.eur), rows: total.rows }))
+    .filter((item) => item.eur !== 0)
+    .sort((a, b) => {
+      if (a.eur !== b.eur) return b.eur - a.eur;
+      return a.code === b.code ? 0 : a.code < b.code ? -1 : 1;
+    });
+}
+
+/** Link rows for the Live URLs tab; empty live links are intentionally excluded. */
+export function liveUrlRowsInScope(
+  data: ApiDataResponse,
+  scope: SpendScope,
+  today: string = NO_FUTURE_FILTER,
+  minRowsPerYear: number = 0,
+): InvoiceRow[] {
+  return completedRowsInScope(data, scope, today, minRowsPerYear)
+    .filter((row) => (row.live_url ?? '').trim().length > 0);
 }
 
 /**

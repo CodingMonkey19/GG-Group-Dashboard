@@ -57,6 +57,8 @@ export interface NormalizedRow {
   artifact_unreachable_reason: string | null;
   website: string | null;
   website_raw: string | null;
+  target_url: string | null;
+  anchor_text: string | null;
   /** Column L value (the published article URL); null when blank. */
   live_url: string | null;
   native_amount: number | null;
@@ -64,6 +66,8 @@ export interface NormalizedRow {
   eur_amount: number | null;
   /** Raw EUR savings supplied by the executive report; legacy rows use zero. */
   savings_eur: number;
+  /** Raw PressWhizz comparison price supplied by the report; null when blank. */
+  presswhizz_price_eur: number | null;
   ecb_rate: number | null;
   ecb_rate_as_of: string | null;
   conversion_status: ConversionStatus;
@@ -280,11 +284,14 @@ export async function normalizeRow(
     artifact_unreachable_reason,
     website,
     website_raw,
+    target_url: trimmedOrNull(row.target_url),
+    anchor_text: trimmedOrNull(row.anchor),
     live_url: row.live_url !== undefined && row.live_url.trim() !== '' ? row.live_url.trim() : null,
     native_amount,
     native_currency,
     eur_amount,
     savings_eur: isReportRow ? row.savings_eur : 0,
+    presswhizz_price_eur: isReportRow ? row.presswhizz_price_eur : null,
     ecb_rate,
     ecb_rate_as_of,
     conversion_status,
@@ -293,6 +300,12 @@ export async function normalizeRow(
     date_source: dateResolution.date_source,
     audit_flags,
   };
+}
+
+function trimmedOrNull(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /** Today's date in ISO YYYY-MM-DD UTC. Used for ECB lookup of undated rows

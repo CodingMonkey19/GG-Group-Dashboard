@@ -49,10 +49,13 @@ function row(partial: Partial<NormalizedRow>): NormalizedRow {
     artifact_unreachable_reason: null,
     website: 'a.com',
     website_raw: 'a.com',
+    target_url: null,
+    anchor_text: null,
     live_url: null,
     native_amount: 100,
     native_currency: 'EUR',
     eur_amount: 100,
+    presswhizz_price_eur: null,
     savings_eur: 0,
     ecb_rate: 1,
     ecb_rate_as_of: '2026-04-01',
@@ -167,7 +170,7 @@ describe('T089 — empty-category zero-count contract (FR-022)', () => {
       db.prepare(
         `INSERT INTO snapshot_metadata (
            singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
-         ) VALUES (1, 2, 2026, 'REPORT_2026', 'Clean Data')`,
+         ) VALUES (1, 3, 2026, 'REPORT_2026', 'Clean Data')`,
       ).run();
       db.prepare(
         `INSERT INTO invoices (

@@ -25,7 +25,10 @@ const REPORT_CONFIG: ReportSourceConfig = {
     reporting_month: 'Month',
     link_builder: 'Link Builder',
     website: 'Website',
+    target_url: 'Target URL',
+    anchor: 'Anchor',
     spend_eur: 'Price (EUR)',
+    presswhizz_price_eur: 'PressWhizz Price (EUR)',
     invoice_url: 'Invoice',
     live_url: 'Live URL',
     invoice_status: 'Invoice Status',
@@ -116,7 +119,7 @@ describe('readReportSource', () => {
       'REPORT_2026',
       'Clean Data',
       4,
-      ['ORDER-A', 'January 2026', '5', '15/01/2026', 'January 2026', 'Ada', 'alpha.example', '€100.00', 'https://invoice/a-jan', 'Paid', 'TRUE', '', '€10.01', 'https://alpha.example/article-a'],
+      ['ORDER-A', 'January 2026', '5', '15/01/2026', 'January 2026', 'Ada', 'alpha.example', '€100.00', 'https://invoice/a-jan', 'Paid', 'TRUE', '', '€10.01', 'https://alpha.example/article-a', 'https://client.example/a', 'alpha anchor', '€110.01'],
     ));
     expect(batch.monthlySummary[1]?.cells).toEqual(['46023', '100', '10.005']);
     expect(batch.orderSummary[1]?.cells).toEqual([

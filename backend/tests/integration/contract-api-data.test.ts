@@ -118,7 +118,7 @@ describe('GET /api/data contract (T040)', () => {
       if (!parsed.success) return;
 
       const data = parsed.data;
-      expect(data.schema_version).toBe(2);
+      expect(data.schema_version).toBe(3);
       expect(data.reporting_year).toBe(2026);
       expect(data.refresh_status).toBe('success');
       expect(Array.isArray(data.excluded_order_codes)).toBe(true);

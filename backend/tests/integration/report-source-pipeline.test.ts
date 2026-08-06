@@ -21,7 +21,9 @@ function reportConfig(): string {
       headers: {
         order: 'Order', source_tab: 'Source Tab', source_row: 'Source Row',
         invoice_date: 'Invoice Date', reporting_month: 'Month', link_builder: 'Link Builder',
-        website: 'Website', spend_eur: 'Price (EUR)', invoice_url: 'Invoice', live_url: 'Live URL',
+        website: 'Website', target_url: 'Target URL', anchor: 'Anchor',
+        spend_eur: 'Price (EUR)', presswhizz_price_eur: 'PressWhizz Price (EUR)',
+        invoice_url: 'Invoice', live_url: 'Live URL',
         invoice_status: 'Invoice Status', included: 'Included in Reporting Period',
         data_quality_issue: 'Data Quality Issue', savings_eur: 'Saving (EUR)',
       },

@@ -33,7 +33,7 @@ function seedMetadata(db: DatabaseT): void {
   db.prepare(
     `INSERT INTO snapshot_metadata (
        singleton_id, schema_version, reporting_year, source_spreadsheet_id, source_tab
-     ) VALUES (1, 2, 2026, 'REPORT_2026', 'Clean Data')`,
+     ) VALUES (1, 3, 2026, 'REPORT_2026', 'Clean Data')`,
   ).run();
 }
 
@@ -83,7 +83,7 @@ function publishStore(
   commitStaging(stagingPath, livePath);
 }
 
-describe('v2 snapshot API boundaries', () => {
+describe('v3 snapshot API boundaries', () => {
   let dataDir: string;
   let configPath: string;
 
@@ -162,14 +162,14 @@ describe('v2 snapshot API boundaries', () => {
     }
   });
 
-  it('treats a metadata-marked empty v2 snapshot as refreshed rather than never_refreshed', async () => {
+  it('treats a metadata-marked empty v3 snapshot as refreshed rather than never_refreshed', async () => {
     publishStore(dataDir, { metadata: true });
     const app = await buildServer({ dataDir, sheetsConfigPath: configPath });
     try {
       const response = await app.inject({ method: 'GET', url: '/api/data' });
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body)).toMatchObject({
-        schema_version: 2,
+        schema_version: 3,
         reporting_year: 2026,
         refresh_status: 'success',
         invoices: [],
@@ -179,7 +179,7 @@ describe('v2 snapshot API boundaries', () => {
     }
   });
 
-  it('returns a valid v2 2026-only snapshot with persisted finite savings', async () => {
+  it('returns a valid v3 2026-only snapshot with persisted finite savings', async () => {
     publishStore(dataDir, {
       metadata: true,
       invoice: { source_row_key: '0000000000000003', savings_eur: 12.75 },
@@ -189,7 +189,7 @@ describe('v2 snapshot API boundaries', () => {
       const response = await app.inject({ method: 'GET', url: '/api/data' });
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      expect(body.schema_version).toBe(2);
+      expect(body.schema_version).toBe(3);
       expect(body.reporting_year).toBe(2026);
       expect(body.invoices).toHaveLength(1);
       expect(body.invoices[0]).toMatchObject({ savings_eur: 12.75, invoice_date: '2026-04-01' });
