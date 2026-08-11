@@ -6,7 +6,7 @@ Give the CEO a clear, professional view of link-level savings and make the Live 
 
 ## Source of truth
 
-Use the existing `Clean Data` tab from spreadsheet `1FnKg-hulPf8XIabIKf1zudLbn2zhTRTWePaoP-lWW5E`. The dashboard must read the supplied reporting Month, Order, Target URL, Anchor, Website, Live URL, Price (EUR), PressWhizz Price (EUR), Saving (EUR), and Invoice Date. It must not estimate or recalculate source prices or savings. January and LiveSportsOdds remain excluded.
+Use the existing `Clean Data` tab from spreadsheet `1FnKg-hulPf8XIabIKf1zudLbn2zhTRTWePaoP-lWW5E`. The dashboard must read the supplied reporting Month, Order, Target URL, Anchor, Website, Live URL, Price (EUR), PressWhizz Price (EUR), Saving (EUR), and Invoice Date. It must not estimate or recalculate source prices or savings. Display January through July 2026; keep August and LiveSportsOdds excluded.
 
 ## Navigation and global filters
 
@@ -57,5 +57,5 @@ Carry Target URL, Anchor, and PressWhizz Price from `Clean Data` through ingesti
 - Live URLs uses the required six columns and respects Month and Order.
 - No CEO-facing card shows ECB Rate, Artifact, Sheet, or Source Row Key.
 - Drill-down cards show Live Link and Anchor Text.
-- January and LiveSportsOdds remain absent.
+- August and LiveSportsOdds remain absent; January through July are present.
 - The deployed dashboard refreshes successfully from the designated source sheet.

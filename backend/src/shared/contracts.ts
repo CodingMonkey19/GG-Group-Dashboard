@@ -145,9 +145,9 @@ export const FolderSourceConfig = z
 export type FolderSourceConfig = z.infer<typeof FolderSourceConfig>;
 
 export const REPORTING_YEAR = 2026 as const;
-/** Dashboard-visible reporting period. January remains in the source workbook for reconciliation. */
-export const DASHBOARD_REPORTING_START_MONTH = '2026-02' as const;
-export const DASHBOARD_REPORTING_END_MONTH = '2027-01' as const;
+/** Dashboard-visible reporting period: January through July 2026, inclusive. */
+export const DASHBOARD_REPORTING_START_MONTH = '2026-01' as const;
+export const DASHBOARD_REPORTING_END_MONTH = '2026-08' as const;
 /** Version of the published, 2026-only API/store snapshot contract. */
 export const API_SCHEMA_VERSION = 3 as const;
 

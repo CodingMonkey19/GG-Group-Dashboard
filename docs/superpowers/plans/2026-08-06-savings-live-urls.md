@@ -4,7 +4,7 @@
 
 **Goal:** Add an executive Savings view and rebuild the Live URLs view while preserving the source sheet's supplied numbers exactly.
 
-**Architecture:** Extend the existing report-source pipeline and snapshot contract with target URL, anchor text, and PressWhizz price. Build the new views from completed snapshot rows using the dashboard's existing month, order, January-exclusion, and LiveSportsOdds-exclusion rules. Keep all calculations additive and derived only from supplied EUR fields.
+**Architecture:** Extend the existing report-source pipeline and snapshot contract with target URL, anchor text, and PressWhizz price. Build the new views from completed snapshot rows using the dashboard's January-through-July boundary, month/order filters, and LiveSportsOdds exclusion. Keep all calculations additive and derived only from supplied EUR fields.
 
 **Tech Stack:** TypeScript, React, Express, SQLite, Vitest, Docker Compose
 
@@ -36,7 +36,7 @@
 - Modify: `frontend/src/lib/selectors.ts`
 - Modify: affected selector tests
 
-- [x] Add a shared completed-row selector respecting Month, Order, February-onward, and LiveSportsOdds exclusions.
+- [x] Add a shared completed-row selector respecting Month, Order, January-through-July, and LiveSportsOdds exclusions.
 - [x] Calculate Total Saved, PressWhizz Equivalent, Our Spend, and Saving Rate from the supplied source values.
 - [x] Produce monthly and order savings breakdowns without recalculating source prices.
 - [x] Produce link-level Savings rows and Live URL rows for the selected filters.
@@ -86,8 +86,8 @@
 - Modify: `/Users/fared/.Codex/primer.md`
 
 - [x] Run the backend and frontend verification suites and production builds.
-- [x] Confirm totals remain identical to the current source-backed Feb–Jul snapshot.
-- [x] Confirm January and LiveSportsOdds are absent.
+- [x] Confirm totals remain identical to the current source-backed January–July snapshot.
+- [x] Confirm August and LiveSportsOdds are absent.
 - [x] Commit and push the implementation to `origin/main`.
 - [x] Back up the live snapshot, rebuild the container, and re-consolidate from the Google Sheet.
 - [x] Verify the live API contains the new fields and preserves all approved totals.

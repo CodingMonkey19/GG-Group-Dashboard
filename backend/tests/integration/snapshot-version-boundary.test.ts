@@ -203,7 +203,7 @@ describe('v3 snapshot API boundaries', () => {
     }
   });
 
-  it('publishes February onward by reporting month while retaining shifted January invoice dates', async () => {
+  it('publishes January through July by reporting month', async () => {
     const stagingPath = resolve(dataDir, 'consolidated.sqlite.new');
     const livePath = resolve(dataDir, 'consolidated.sqlite');
     const db = openStagingStore(stagingPath);
@@ -230,12 +230,11 @@ describe('v3 snapshot API boundaries', () => {
       const response = await app.inject({ method: 'GET', url: '/api/data' });
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      expect(body.invoices).toHaveLength(1);
-      expect(body.invoices[0]).toMatchObject({
-        source_row_key: '0000000000000020',
-        invoice_date: '2027-01-20',
-        invoice_month: '2026-02',
-      });
+      expect(body.invoices).toHaveLength(2);
+      expect(body.invoices.map((row: { source_row_key: string }) => row.source_row_key)).toEqual([
+        '0000000000000010',
+        '0000000000000020',
+      ]);
     } finally {
       await app.close();
     }

@@ -85,7 +85,7 @@ describe('readReportSource', () => {
     expect(row).toMatchObject({ savings_eur: 0, source_mode: 'legacy' });
   });
 
-  it('reads February onward for publication while retaining January for reconciliation', async () => {
+  it('publishes January through July while retaining the full workbook for reconciliation', async () => {
     const { gws } = reportFixture();
     const calls: Array<{ tab: string; option: string | undefined }> = [];
     const original = gws.pullSheetRange.bind(gws);
@@ -97,11 +97,11 @@ describe('readReportSource', () => {
     const batch = await readReportSource(REPORT_CONFIG, gws);
 
     expect(batch.rows.every((row) => row.invoice_date?.startsWith('2026-'))).toBe(true);
-    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-B']);
+    expect(batch.rows.map((row) => row.order_code)).toEqual(['ORDER-A', 'ORDER-A', 'ORDER-B']);
     expect(batch.reconciliationRows[0]?.invoice_date).toBe('2026-01-15');
     expect(batch.reconciliationRows[0]?.reporting_month).toBe('2026-01');
     expect(batch.reconciliationRows[0]?.savings_eur).toBe(10.005);
-    expect(batch.rows[1]).toMatchObject({
+    expect(batch.rows[2]).toMatchObject({
       order_code: 'ORDER-B',
       tab_name: 'July 2026',
       row_index: 5,
@@ -129,7 +129,7 @@ describe('readReportSource', () => {
       spreadsheet_id: 'REPORT_2026',
       order_code: '2026 Spending Report',
       status: 'success',
-      rows_pulled: 2,
+      rows_pulled: 3,
     });
     expect(calls).toEqual([
       { tab: 'Clean Data', option: 'FORMATTED_VALUE' },
@@ -209,7 +209,7 @@ describe('readReportSource', () => {
     await expect(readReportSource(REPORT_CONFIG, invalidMonth.gws)).rejects.toThrow('invalid reporting Month');
   });
 
-  it('retains a December invoice remapped to January for reconciliation only', async () => {
+  it('publishes a December invoice when the source explicitly reports it in January', async () => {
     const shifted = reportFixture((clean) => {
       setPairedCell(clean, 3, 3, '15/12/2025');
       setPairedCell(clean, 3, 4, 'January 2026');
@@ -221,7 +221,7 @@ describe('readReportSource', () => {
       invoice_date: '2025-12-15',
       reporting_month: '2026-01',
     });
-    expect(batch.rows.some((row) => row.reporting_month === '2026-01')).toBe(false);
+    expect(batch.rows.some((row) => row.reporting_month === '2026-01')).toBe(true);
   });
 
   it('keeps an explicit source-tab reporting month even when the invoice date is in another month', async () => {

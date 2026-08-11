@@ -109,9 +109,9 @@ export async function readReportSource(
     if (reportingMonth === null) {
       throw rowError(formatted, 'invalid reporting Month');
     }
-    // Historical/future source rows are outside this report. A December 2025
-    // invoice remapped to January 2026 is intentionally retained for full
-    // workbook reconciliation, even though January is not published.
+    // Historical/future source rows are outside this report. The workbook's
+    // complete 2026 rows remain available for reconciliation even when they
+    // fall outside the dashboard's January-through-July publication window.
     if (!reportingMonth.startsWith('2026-')) continue;
 
     const orderCode = formattedCell(formatted, columns.order).trim();
