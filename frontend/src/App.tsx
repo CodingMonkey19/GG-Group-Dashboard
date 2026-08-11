@@ -18,6 +18,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, fetchData, subscribeRefresh } from './lib/api';
 import type { ApiDataResponse, InvoiceRow } from './lib/contracts';
 import {
+  dateRangeLabel,
+  filterDataByDateRange,
+  isValidDateRange,
+  previousEqualRange,
+  rangeForMonth,
+  type DateRange,
+} from './lib/dateRanges';
+import {
   completedRowsInScope,
   distinctOrderCodes,
   drillRowsForScope,
@@ -46,6 +54,7 @@ import {
   resolveComparisonMonth,
   type ComparisonSelection,
 } from './components/CompareSelector';
+import { DateRangeControls } from './components/DateRangeControls';
 import { DonutChart } from './components/DonutChart';
 import { KpiCard, type KpiComparison } from './components/KpiCard';
 import { LineChart } from './components/LineChart';
@@ -93,6 +102,8 @@ export function App(): JSX.Element {
   const [month, setMonth] = useState<string>('');
   const [order, setOrder] = useState<string | null>(null);
   const [comparison, setComparison] = useState<ComparisonSelection>('off');
+  const [dateRange, setDateRange] = useState<DateRange>(() => rangeForMonth('07'));
+  const [comparisonRange, setComparisonRange] = useState<DateRange>(() => previousEqualRange(rangeForMonth('07')));
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
 
   // Refresh-state (formerly useFreshnessRefresh) inlined.
@@ -188,6 +199,16 @@ export function App(): JSX.Element {
     : (monthOptions.at(-1) ?? '01');
   const compareMonth = resolveComparisonMonth(comparison, selectedMonth, monthOptions);
   const orders = useMemo(() => (data !== null ? distinctOrderCodes(data) : []), [data]);
+  const displayData = useMemo(
+    () => data !== null && scope === 'range' ? filterDataByDateRange(data, dateRange) : data,
+    [data, scope, dateRange.from, dateRange.to],
+  );
+  const comparisonData = useMemo(
+    () => data !== null && scope === 'range' && comparison === 'custom'
+      ? filterDataByDateRange(data, comparisonRange)
+      : null,
+    [data, scope, comparison, comparisonRange.from, comparisonRange.to],
+  );
 
   // Open on the latest available 2026 month and retain valid selections.
   useEffect(() => {
@@ -197,7 +218,15 @@ export function App(): JSX.Element {
   }, [month, monthOptions]);
 
   useEffect(() => {
-    if (scope === 'year' || (comparison !== 'off' && compareMonth === null)) {
+    if (scope === 'year') {
+      setComparison('off');
+      return;
+    }
+    if (scope === 'range') {
+      if (comparison !== 'off' && comparison !== 'custom') setComparison('off');
+      return;
+    }
+    if (comparison === 'custom' || (comparison !== 'off' && compareMonth === null)) {
       setComparison('off');
     }
   }, [scope, comparison, compareMonth]);
@@ -229,7 +258,7 @@ export function App(): JSX.Element {
               months={monthOptions}
               value={selectedMonth}
               onChange={setMonth}
-              disabled={view !== 'websites' && scope === 'year'}
+              disabled={view !== 'websites' && scope !== 'month'}
             />
             <OrderFilter orders={orders} value={order} onChange={setOrder} />
             {view !== 'websites' && (
@@ -239,6 +268,7 @@ export function App(): JSX.Element {
                 value={comparison}
                 onChange={setComparison}
                 disabled={scope === 'year'}
+                rangeMode={scope === 'range'}
               />
             )}
           </div>
@@ -274,8 +304,35 @@ export function App(): JSX.Element {
       {data !== null && (
         <div className="view-toggle-row">
           <ViewToggle value={view} onChange={setView} />
-          {view !== 'websites' && <ScopeToggle value={scope} onChange={setScope} />}
+          {view !== 'websites' && (
+            <ScopeToggle
+              value={scope}
+              onChange={(nextScope) => {
+                if (nextScope === 'range' && scope !== 'range') {
+                  const selectedRange = rangeForMonth(selectedMonth);
+                  setDateRange(selectedRange);
+                  setComparisonRange(previousEqualRange(selectedRange));
+                  setComparison('off');
+                }
+                setScope(nextScope);
+              }}
+            />
+          )}
         </div>
+      )}
+
+      {data !== null && view !== 'websites' && scope === 'range' && (
+        <DateRangeControls
+          primary={dateRange}
+          onPrimaryChange={(next) => {
+            if (isValidDateRange(next)) setDateRange(next);
+          }}
+          comparison={comparisonRange}
+          onComparisonChange={(next) => {
+            if (isValidDateRange(next)) setComparisonRange(next);
+          }}
+          showComparison={comparison === 'custom'}
+        />
       )}
 
       <main className="app-main">
@@ -285,6 +342,12 @@ export function App(): JSX.Element {
           scope,
           month: selectedMonth,
           compareMonth,
+          displayData,
+          comparisonData,
+          rangeLabel: scope === 'range' ? dateRangeLabel(dateRange) : null,
+          comparisonRangeLabel: scope === 'range' && comparison === 'custom'
+            ? dateRangeLabel(comparisonRange)
+            : null,
           order,
           orders,
           today,
@@ -321,6 +384,10 @@ function renderMain({
   scope,
   month,
   compareMonth,
+  displayData,
+  comparisonData,
+  rangeLabel,
+  comparisonRangeLabel,
   order,
   orders,
   today,
@@ -332,6 +399,10 @@ function renderMain({
   scope: Scope;
   month: string;
   compareMonth: string | null;
+  displayData: ApiDataResponse | null;
+  comparisonData: ApiDataResponse | null;
+  rangeLabel: string | null;
+  comparisonRangeLabel: string | null;
   order: string | null;
   orders: string[];
   today: string;
@@ -375,10 +446,11 @@ function renderMain({
       );
 
     case 'ready': {
+      const activeData = displayData ?? state.data;
       if (view === 'websites') {
         return (
           <WebsitesContent
-            data={state.data}
+            data={activeData}
             month={month}
             order={order}
             today={today}
@@ -389,10 +461,13 @@ function renderMain({
       if (view === 'savings') {
         return (
           <SavingsView
-            data={state.data}
+            data={activeData}
             scopeMode={scope}
             month={month}
             compareMonth={compareMonth}
+            comparisonData={comparisonData}
+            rangeLabel={rangeLabel}
+            comparisonRangeLabel={comparisonRangeLabel}
             order={order}
             today={today}
             refreshError={refreshError}
@@ -402,10 +477,13 @@ function renderMain({
       }
       return (
         <SpendView
-          data={state.data}
+          data={activeData}
           scopeMode={scope}
           month={month}
           compareMonth={compareMonth}
+          comparisonData={comparisonData}
+          rangeLabel={rangeLabel}
+          comparisonRangeLabel={comparisonRangeLabel}
           order={order}
           orders={orders}
           today={today}
@@ -466,11 +544,31 @@ function buildRateComparison(
   };
 }
 
+function aggregateBreakdowns(items: MonthBreakdown[], key: string): MonthBreakdown {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    for (const project of item.byProject) {
+      totals.set(project.code, (totals.get(project.code) ?? 0) + project.value);
+    }
+  }
+  const byProject = Array.from(totals.entries())
+    .map(([code, value]) => ({ code, value: Math.round(value * 100) / 100 }))
+    .sort((a, b) => b.value - a.value || a.code.localeCompare(b.code));
+  return {
+    m: key,
+    total: Math.round(byProject.reduce((sum, item) => sum + item.value, 0) * 100) / 100,
+    byProject,
+  };
+}
+
 interface SpendViewProps {
   data: ApiDataResponse;
+  comparisonData: ApiDataResponse | null;
   scopeMode: Scope;
   month: string;
   compareMonth: string | null;
+  rangeLabel: string | null;
+  comparisonRangeLabel: string | null;
   order: string | null;
   orders: string[];
   today: string;
@@ -480,9 +578,12 @@ interface SpendViewProps {
 
 function SpendView({
   data,
+  comparisonData,
   scopeMode,
   month,
   compareMonth,
+  rangeLabel,
+  comparisonRangeLabel,
   order,
   orders,
   today,
@@ -490,40 +591,51 @@ function SpendView({
   onDrillDown,
 }: SpendViewProps): JSX.Element {
   const scope: SpendScope = {
-    year: REPORTING_YEAR,
-    month: scopeMode === 'year' ? 'all' : month,
+    year: scopeMode === 'range' ? 'all' : REPORTING_YEAR,
+    month: scopeMode === 'year' || scopeMode === 'range' ? 'all' : month,
     orderCode: order,
   };
+  const minVisibleRows = scopeMode === 'range' ? 0 : MIN_VISIBLE_YEAR_ROWS;
 
   const summary = useMemo(
-    () => spendInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => spendInScope(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
   const comparisonSummary = useMemo(
-    () => compareMonth === null
-      ? null
-      : spendInScope(data, {
+    () => comparisonData !== null
+      ? spendInScope(comparisonData, { year: 'all', month: 'all', orderCode: order }, today, 0)
+      : compareMonth === null
+        ? null
+        : spendInScope(data, {
           year: REPORTING_YEAR,
           month: compareMonth,
           orderCode: order,
         }, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, compareMonth, order, today],
+    [data, comparisonData, compareMonth, order, today],
   );
   const breakdowns = useMemo(
-    () => monthlyBreakdowns(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => monthlyBreakdowns(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
   const comparisonBreakdowns = useMemo(
-    () => compareMonth === null
-      ? []
-      : monthlyBreakdowns(data, {
+    () => comparisonData !== null
+      ? monthlyBreakdowns(comparisonData, { year: 'all', month: 'all', orderCode: order }, today, 0)
+      : compareMonth === null
+        ? []
+        : monthlyBreakdowns(data, {
           year: REPORTING_YEAR,
           month: compareMonth,
           orderCode: order,
         }, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, compareMonth, order, today],
+    [data, comparisonData, compareMonth, order, today],
   );
   const chartBreakdowns = useMemo(() => {
+    if (comparisonData !== null) {
+      return [
+        aggregateBreakdowns(comparisonBreakdowns, 'Comparison'),
+        aggregateBreakdowns(breakdowns, 'Selected'),
+      ];
+    }
     if (compareMonth === null || scopeMode === 'year') return breakdowns;
 
     const currentKey = `${REPORTING_YEAR}-${month}`;
@@ -534,7 +646,7 @@ function SpendView({
     return [comparisonKey, currentKey]
       .sort()
       .map((key) => byMonth.get(key) ?? { m: key, total: 0, byProject: [] });
-  }, [breakdowns, comparisonBreakdowns, compareMonth, month, scopeMode]);
+  }, [breakdowns, comparisonBreakdowns, comparisonData, compareMonth, month, scopeMode]);
   const ranked = useMemo(() => {
     const totals = new Map<string, number>();
     for (const b of breakdowns) {
@@ -551,10 +663,25 @@ function SpendView({
       });
   }, [breakdowns]);
   const rowsSeries = useMemo(
-    () => rowsDoneSeries(data, order, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, order, today],
+    () => rowsDoneSeries(data, order, today, minVisibleRows),
+    [data, order, today, minVisibleRows],
+  );
+  const comparisonRowsSeries = useMemo(
+    () => comparisonData === null ? null : rowsDoneSeries(comparisonData, order, today, 0),
+    [comparisonData, order, today],
   );
   const chartRowsSeries = useMemo(() => {
+    if (comparisonRowsSeries !== null) {
+      return {
+        months: ['Comparison', 'Selected'],
+        counts: [
+          comparisonRowsSeries.counts.reduce((sum, count) => sum + count, 0),
+          rowsSeries.counts.reduce((sum, count) => sum + count, 0),
+        ],
+        currentIndex: 1,
+        comparisonIndex: 0,
+      };
+    }
     const currentKey = `${REPORTING_YEAR}-${month}`;
     const comparisonKey = compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`;
     const counts = new Map(rowsSeries.months.map((item, index) => [item, rowsSeries.counts[index] ?? 0]));
@@ -567,16 +694,18 @@ function SpendView({
       currentIndex: months.indexOf(currentKey),
       comparisonIndex: comparisonKey === null ? null : months.indexOf(comparisonKey),
     };
-  }, [rowsSeries, month, compareMonth]);
+  }, [rowsSeries, comparisonRowsSeries, month, compareMonth]);
 
   const isSingleProj = order !== null;
   const periodLabel = scopeMode === 'year'
     ? '2026 Overall'
-    : scopeLabelFor({ year: REPORTING_YEAR, month });
+    : scopeMode === 'range' && rangeLabel !== null
+      ? rangeLabel
+      : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
-  const comparisonLabel = compareMonth === null
+  const comparisonLabel = comparisonRangeLabel ?? (compareMonth === null
     ? null
-    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth });
+    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth }));
   const spendComparison = comparisonSummary === null || comparisonLabel === null
     ? undefined
     : buildKpiComparison(comparisonLabel, summary.eur, comparisonSummary.eur, 'neutral');
@@ -592,7 +721,7 @@ function SpendView({
     () => drillRowsForScope(
       data,
       order,
-      scopeMode === 'year' ? null : `${REPORTING_YEAR}-${month}`,
+      scopeMode === 'year' || scopeMode === 'range' ? null : `${REPORTING_YEAR}-${month}`,
     ),
     [data, order, scopeMode, month],
   );
@@ -640,8 +769,10 @@ function SpendView({
 
       <section className="grid-2">
         <Panel
-          title="Links built per month"
-          subtitle={`${chartRowsSeries.months.length} months${isSingleProj && order !== null ? ` · ${order}` : ''}`}
+          title={scopeMode === 'range' && comparisonData !== null ? 'Links built comparison' : 'Links built per month'}
+          subtitle={scopeMode === 'range' && comparisonData !== null
+            ? `${periodLabel} vs ${comparisonLabel ?? 'comparison'}`
+            : `${chartRowsSeries.months.length} months${isSingleProj && order !== null ? ` · ${order}` : ''}`}
           {...(comparisonLabel === null ? {} : {
             legend: [
               { label: periodLabel, cls: 'legend__dot--current' },
@@ -657,7 +788,7 @@ function SpendView({
           />
         </Panel>
         <Panel
-          title="Spend per month"
+          title={scopeMode === 'range' && comparisonData !== null ? 'Spend comparison' : 'Spend per month'}
           subtitle={comparisonLabel === null
             ? `EUR · ${scopeLabel}`
             : `EUR · ${periodLabel} vs ${comparisonLabel}`}
@@ -670,8 +801,8 @@ function SpendView({
         >
           <StackedBars
             data={chartBreakdowns}
-            currentMonth={scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
-            comparisonMonth={compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
+            currentMonth={comparisonData !== null ? 'Selected' : scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
+            comparisonMonth={comparisonData !== null ? 'Comparison' : compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
           />
         </Panel>
       </section>
@@ -707,9 +838,12 @@ function SpendView({
 
 interface SavingsViewProps {
   data: ApiDataResponse;
+  comparisonData: ApiDataResponse | null;
   scopeMode: Scope;
   month: string;
   compareMonth: string | null;
+  rangeLabel: string | null;
+  comparisonRangeLabel: string | null;
   order: string | null;
   today: string;
   refreshError: string | null;
@@ -718,43 +852,55 @@ interface SavingsViewProps {
 
 function SavingsView({
   data,
+  comparisonData,
   scopeMode,
   month,
   compareMonth,
+  rangeLabel,
+  comparisonRangeLabel,
   order,
   today,
   refreshError,
   onDrillDown,
 }: SavingsViewProps): JSX.Element {
   const scope: SpendScope = {
-    year: REPORTING_YEAR,
-    month: scopeMode === 'year' ? 'all' : month,
+    year: scopeMode === 'range' ? 'all' : REPORTING_YEAR,
+    month: scopeMode === 'year' || scopeMode === 'range' ? 'all' : month,
     orderCode: order,
   };
-  const comparisonScope: SpendScope | null = compareMonth === null
+  const minVisibleRows = scopeMode === 'range' ? 0 : MIN_VISIBLE_YEAR_ROWS;
+  const comparisonScope: SpendScope | null = comparisonData !== null
+    ? { year: 'all', month: 'all', orderCode: order }
+    : compareMonth === null
     ? null
     : { year: REPORTING_YEAR, month: compareMonth, orderCode: order };
   const summary = useMemo(
-    () => savingsInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => savingsInScope(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
   const comparisonSummary = useMemo(
     () => comparisonScope === null
       ? null
-      : savingsInScope(data, comparisonScope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
+      : savingsInScope(comparisonData ?? data, comparisonScope, today, comparisonData === null ? MIN_VISIBLE_YEAR_ROWS : 0),
+    [data, comparisonData, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
   );
   const breakdowns = useMemo(
-    () => savingsBreakdowns(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => savingsBreakdowns(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
   const comparisonBreakdowns = useMemo(
     () => comparisonScope === null
       ? []
-      : savingsBreakdowns(data, comparisonScope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
+      : savingsBreakdowns(comparisonData ?? data, comparisonScope, today, comparisonData === null ? MIN_VISIBLE_YEAR_ROWS : 0),
+    [data, comparisonData, comparisonScope?.year, comparisonScope?.month, comparisonScope?.orderCode, today],
   );
   const chartBreakdowns = useMemo(() => {
+    if (comparisonData !== null) {
+      return [
+        aggregateBreakdowns(comparisonBreakdowns, 'Comparison'),
+        aggregateBreakdowns(breakdowns, 'Selected'),
+      ];
+    }
     if (compareMonth === null || scopeMode === 'year') return breakdowns;
     const currentKey = `${REPORTING_YEAR}-${month}`;
     const comparisonKey = `${REPORTING_YEAR}-${compareMonth}`;
@@ -763,23 +909,25 @@ function SavingsView({
     return [comparisonKey, currentKey]
       .sort()
       .map((key) => byMonth.get(key) ?? { m: key, total: 0, byProject: [] });
-  }, [breakdowns, comparisonBreakdowns, compareMonth, month, scopeMode]);
+  }, [breakdowns, comparisonBreakdowns, comparisonData, compareMonth, month, scopeMode]);
   const ranked = useMemo(
-    () => savingsByOrder(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => savingsByOrder(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
   const rows = useMemo(
-    () => completedRowsInScope(data, scope, today, MIN_VISIBLE_YEAR_ROWS),
-    [data, scope.year, scope.month, scope.orderCode, today],
+    () => completedRowsInScope(data, scope, today, minVisibleRows),
+    [data, scope.year, scope.month, scope.orderCode, today, minVisibleRows],
   );
 
   const periodLabel = scopeMode === 'year'
     ? '2026 Overall'
-    : scopeLabelFor({ year: REPORTING_YEAR, month });
+    : scopeMode === 'range' && rangeLabel !== null
+      ? rangeLabel
+      : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order === null ? periodLabel : `${order} · ${periodLabel}`;
-  const comparisonLabel = compareMonth === null
+  const comparisonLabel = comparisonRangeLabel ?? (compareMonth === null
     ? null
-    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth });
+    : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth }));
   const comparisonFor = (
     current: number,
     baseline: number | undefined,
@@ -858,7 +1006,7 @@ function SavingsView({
 
       <section className="grid-2">
         <Panel
-          title="Savings by month"
+          title={scopeMode === 'range' && comparisonData !== null ? 'Savings comparison' : 'Savings by month'}
           subtitle={comparisonLabel === null ? `EUR · ${scopeLabel}` : `EUR · ${periodLabel} vs ${comparisonLabel}`}
           {...(comparisonLabel === null ? {} : {
             legend: [
@@ -869,8 +1017,8 @@ function SavingsView({
         >
           <StackedBars
             data={chartBreakdowns}
-            currentMonth={scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
-            comparisonMonth={compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
+            currentMonth={comparisonData !== null ? 'Selected' : scopeMode === 'month' ? `${REPORTING_YEAR}-${month}` : null}
+            comparisonMonth={comparisonData !== null ? 'Comparison' : compareMonth === null ? null : `${REPORTING_YEAR}-${compareMonth}`}
           />
         </Panel>
         <Panel title="Savings by order" subtitle={`${fmtNum(ranked.length)} orders · ${scopeLabel}`}>

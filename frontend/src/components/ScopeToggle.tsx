@@ -1,4 +1,4 @@
-export type Scope = 'month' | 'year';
+export type Scope = 'month' | 'year' | 'range';
 
 interface Props {
   value: Scope;
@@ -23,6 +23,14 @@ export function ScopeToggle({ value, onChange }: Props): JSX.Element {
         onClick={() => onChange('year')}
       >
         2026 Overall
+      </button>
+      <button
+        type="button"
+        className={`scope-toggle__btn ${value === 'range' ? 'scope-toggle__btn--active' : ''}`}
+        aria-pressed={value === 'range'}
+        onClick={() => onChange('range')}
+      >
+        Custom period
       </button>
     </div>
   );

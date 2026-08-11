@@ -127,6 +127,28 @@ button, select, input { font-family: inherit; color: inherit; }
 }
 .topbar__updated { font: 500 12px var(--font); color: var(--ink-3); }
 
+.date-range-row {
+  width: 100%; max-width: 1440px; margin: 0 auto; padding: 14px 40px 0;
+  display: flex; justify-content: flex-end; gap: 16px;
+}
+.date-range-fields {
+  margin: 0; padding: 8px 12px 10px; display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface);
+}
+.date-range-fields legend {
+  padding: 0 5px; font: 600 10px var(--mono); color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.date-range-fields label { display: flex; align-items: center; gap: 6px; }
+.date-range-fields label span {
+  font: 600 10px var(--mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.date-range-fields input {
+  padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink); font: 500 12px var(--font);
+}
+.date-range-fields input:focus { outline: 2px solid var(--accent-2); outline-offset: -1px; }
+
 /* ---------- View toggle ---------- */
 .view-toggle-row {
   width: 100%;
@@ -787,6 +809,8 @@ button, select, input { font-family: inherit; color: inherit; }
 @media (max-width: 1080px) {
   .app-topbar { grid-template-columns: 1fr; gap: 16px; }
   .topbar__filters { flex-wrap: wrap; gap: 16px; }
+  .date-range-row { justify-content: flex-start; flex-wrap: wrap; padding-inline: 20px; }
+  .date-range-fields { flex-wrap: wrap; }
   .hero-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .savings-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }

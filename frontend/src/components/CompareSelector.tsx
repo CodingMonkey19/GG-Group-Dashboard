@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 import { scopeLabelFor } from '../lib/format';
 
-export type ComparisonSelection = 'off' | 'previous' | `month:${string}`;
+export type ComparisonSelection = 'off' | 'previous' | 'custom' | `month:${string}`;
 
 interface Props {
   months: string[];
@@ -9,6 +9,7 @@ interface Props {
   value: ComparisonSelection;
   onChange: (selection: ComparisonSelection) => void;
   disabled?: boolean;
+  rangeMode?: boolean;
 }
 
 export function resolveComparisonMonth(
@@ -17,6 +18,7 @@ export function resolveComparisonMonth(
   availableMonths: string[],
 ): string | null {
   if (selection === 'off') return null;
+  if (selection === 'custom') return null;
   if (selection === 'previous') {
     const currentIndex = availableMonths.indexOf(currentMonth);
     return currentIndex > 0 ? (availableMonths[currentIndex - 1] ?? null) : null;
@@ -31,6 +33,7 @@ export function CompareSelector({
   value,
   onChange,
   disabled = false,
+  rangeMode = false,
 }: Props): JSX.Element {
   const hasPrevious = months.indexOf(currentMonth) > 0;
   const handleChange = (event: ChangeEvent<HTMLSelectElement>): void => {
@@ -48,12 +51,18 @@ export function CompareSelector({
           disabled={disabled}
         >
           <option value="off">Off</option>
-          <option value="previous" disabled={!hasPrevious}>Previous month</option>
-          {months.filter((month) => month !== currentMonth).map((month) => (
-            <option key={month} value={`month:${month}`}>
-              {scopeLabelFor({ year: '2026', month })}
-            </option>
-          ))}
+          {rangeMode ? (
+            <option value="custom">Custom period</option>
+          ) : (
+            <>
+              <option value="previous" disabled={!hasPrevious}>Previous month</option>
+              {months.filter((month) => month !== currentMonth).map((month) => (
+                <option key={month} value={`month:${month}`}>
+                  {scopeLabelFor({ year: '2026', month })}
+                </option>
+              ))}
+            </>
+          )}
         </select>
         <span className="select__chev" aria-hidden="true">▾</span>
       </span>
