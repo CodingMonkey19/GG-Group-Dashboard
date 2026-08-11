@@ -558,6 +558,19 @@ function aggregateBreakdowns(items: MonthBreakdown[], key: string): MonthBreakdo
   };
 }
 
+function rankProjectsFromBreakdowns(items: MonthBreakdown[]): Array<{ code: string; eur: number }> {
+  const totals = new Map<string, number>();
+  for (const breakdown of items) {
+    for (const project of breakdown.byProject) {
+      totals.set(project.code, (totals.get(project.code) ?? 0) + project.value);
+    }
+  }
+  return Array.from(totals.entries())
+    .map(([code, eur]) => ({ code, eur: Math.round(eur * 100) / 100 }))
+    .filter((project) => project.eur > 0)
+    .sort((a, b) => b.eur - a.eur || a.code.localeCompare(b.code));
+}
+
 interface SpendViewProps {
   data: ApiDataResponse;
   comparisonData: ApiDataResponse | null;
@@ -644,21 +657,11 @@ function SpendView({
       .sort()
       .map((key) => byMonth.get(key) ?? { m: key, total: 0, byProject: [] });
   }, [breakdowns, comparisonBreakdowns, comparisonData, compareMonth, month, scopeMode]);
-  const ranked = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const b of breakdowns) {
-      for (const p of b.byProject) {
-        totals.set(p.code, (totals.get(p.code) ?? 0) + p.value);
-      }
-    }
-    return Array.from(totals.entries())
-      .map(([code, eur]) => ({ code, eur: Math.round(eur * 100) / 100 }))
-      .filter((p) => p.eur > 0)
-      .sort((a, b) => {
-        if (a.eur !== b.eur) return b.eur - a.eur;
-        return a.code === b.code ? 0 : a.code < b.code ? -1 : 1;
-      });
-  }, [breakdowns]);
+  const ranked = useMemo(() => rankProjectsFromBreakdowns(breakdowns), [breakdowns]);
+  const comparisonRanked = useMemo(
+    () => rankProjectsFromBreakdowns(comparisonBreakdowns),
+    [comparisonBreakdowns],
+  );
   const rowsSeries = useMemo(
     () => rowsDoneSeries(data, order, today, minVisibleRows),
     [data, order, today, minVisibleRows],
@@ -804,22 +807,36 @@ function SpendView({
         </Panel>
       </section>
 
-      {!isSingleProj && ranked.length > 1 && (
+      {!isSingleProj && ranked.length > 1 && comparisonLabel === null && (
         <section className="grid-2">
-          <Panel
-            title="Projects by spend"
-            subtitle={`${fmtNum(ranked.length)} active · ${scopeLabel}`}
-          >
-            <RankedBars
-              rows={ranked.map((p) => ({ label: p.code, value: p.eur, sub: '' }))}
-              accent="blue"
-              formatValue={fmtEur}
-            />
+          <Panel title="Projects by spend" subtitle={`${fmtNum(ranked.length)} active · ${scopeLabel}`}>
+            <RankedBars rows={ranked.map((p) => ({ label: p.code, value: p.eur, sub: '' }))} accent="blue" formatValue={fmtEur} />
           </Panel>
           <Panel title="Spend distribution" subtitle={`Share of total · ${scopeLabel}`}>
             <DonutChart slices={ranked.map((p) => ({ label: p.code, value: p.eur }))} />
           </Panel>
         </section>
+      )}
+
+      {!isSingleProj && ranked.length > 1 && comparisonLabel !== null && (
+        <>
+          <section className="grid-2">
+            <Panel title="Projects by spend — Selected" subtitle={`${fmtNum(ranked.length)} active · ${scopeLabel}`}>
+              <RankedBars rows={ranked.map((p) => ({ label: p.code, value: p.eur, sub: '' }))} accent="blue" formatValue={fmtEur} />
+            </Panel>
+            <Panel title="Projects by spend — Comparison" subtitle={`${fmtNum(comparisonRanked.length)} active · ${comparisonLabel}`}>
+              <RankedBars rows={comparisonRanked.map((p) => ({ label: p.code, value: p.eur, sub: '' }))} accent="ink" formatValue={fmtEur} />
+            </Panel>
+          </section>
+          <section className="grid-2">
+            <Panel title="Spend distribution — Selected" subtitle={`Share of total · ${scopeLabel}`}>
+              <DonutChart slices={ranked.map((p) => ({ label: p.code, value: p.eur }))} />
+            </Panel>
+            <Panel title="Spend distribution — Comparison" subtitle={`Share of total · ${comparisonLabel}`}>
+              <DonutChart slices={comparisonRanked.map((p) => ({ label: p.code, value: p.eur }))} />
+            </Panel>
+          </section>
+        </>
       )}
 
       {/* orders is consumed by App for the filter; keep the reference so this
