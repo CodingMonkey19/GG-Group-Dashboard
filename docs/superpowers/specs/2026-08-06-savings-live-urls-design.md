@@ -6,7 +6,7 @@ Give the CEO a clear, professional view of link-level savings and make the Live 
 
 ## Source of truth
 
-Use the existing `Clean Data` tab from spreadsheet `19J-aZhf3fsEasUSRl9c1rXPr4nF6e63XsYI4VgNVrGg`. The dashboard must read the supplied reporting Month, Order, Target URL, Anchor, Website, Live URL, Price (EUR), PressWhizz Price (EUR), Saving (EUR), and Invoice Date. It must not estimate or recalculate source prices or savings. January and LiveSportsOdds remain excluded.
+Use the existing `Clean Data` tab from spreadsheet `1FnKg-hulPf8XIabIKf1zudLbn2zhTRTWePaoP-lWW5E`. The dashboard must read the supplied reporting Month, Order, Target URL, Anchor, Website, Live URL, Price (EUR), PressWhizz Price (EUR), Saving (EUR), and Invoice Date. It must not estimate or recalculate source prices or savings. January and LiveSportsOdds remain excluded.
 
 ## Navigation and global filters
 
