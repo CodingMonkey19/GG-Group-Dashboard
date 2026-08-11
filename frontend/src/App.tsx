@@ -64,7 +64,7 @@ import { OrderFilter } from './components/OrderFilter';
 import { Panel } from './components/Panel';
 import { ProvenanceDrawer } from './components/ProvenanceDrawer';
 import { RankedBars } from './components/RankedBars';
-import { ScopeToggle, type Scope } from './components/ScopeToggle';
+import type { Scope } from './components/ScopeToggle';
 import { SavingsTable } from './components/SavingsTable';
 import { StackedBars } from './components/StackedBars';
 import { ViewToggle, type View } from './components/ViewToggle';
@@ -258,7 +258,18 @@ export function App(): JSX.Element {
               months={monthOptions}
               value={selectedMonth}
               onChange={setMonth}
-              disabled={view !== 'websites' && scope !== 'month'}
+              scope={view === 'websites' ? 'month' : scope}
+              showScopeOptions={view !== 'websites'}
+              onScopeChange={(nextScope) => {
+                if (view === 'websites') return;
+                if (nextScope === 'range' && scope !== 'range') {
+                  const selectedRange = rangeForMonth(selectedMonth);
+                  setDateRange(selectedRange);
+                  setComparisonRange(previousEqualRange(selectedRange));
+                  setComparison('custom');
+                }
+                setScope(nextScope);
+              }}
             />
             <OrderFilter orders={orders} value={order} onChange={setOrder} />
             {view !== 'websites' && (
@@ -299,40 +310,26 @@ export function App(): JSX.Element {
           </button>
           <span className="topbar__updated">{updatedLabel}</span>
         </div>
+
+        {data !== null && view !== 'websites' && scope === 'range' && (
+          <DateRangeControls
+            primary={dateRange}
+            onPrimaryChange={(next) => {
+              if (isValidDateRange(next)) setDateRange(next);
+            }}
+            comparison={comparisonRange}
+            onComparisonChange={(next) => {
+              if (isValidDateRange(next)) setComparisonRange(next);
+            }}
+            showComparison={comparison === 'custom'}
+          />
+        )}
       </header>
 
       {data !== null && (
         <div className="view-toggle-row">
           <ViewToggle value={view} onChange={setView} />
-          {view !== 'websites' && (
-            <ScopeToggle
-              value={scope}
-              onChange={(nextScope) => {
-                if (nextScope === 'range' && scope !== 'range') {
-                  const selectedRange = rangeForMonth(selectedMonth);
-                  setDateRange(selectedRange);
-                  setComparisonRange(previousEqualRange(selectedRange));
-                  setComparison('off');
-                }
-                setScope(nextScope);
-              }}
-            />
-          )}
         </div>
-      )}
-
-      {data !== null && view !== 'websites' && scope === 'range' && (
-        <DateRangeControls
-          primary={dateRange}
-          onPrimaryChange={(next) => {
-            if (isValidDateRange(next)) setDateRange(next);
-          }}
-          comparison={comparisonRange}
-          onComparisonChange={(next) => {
-            if (isValidDateRange(next)) setComparisonRange(next);
-          }}
-          showComparison={comparison === 'custom'}
-        />
       )}
 
       <main className="app-main">

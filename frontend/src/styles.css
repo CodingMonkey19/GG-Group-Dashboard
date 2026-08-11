@@ -131,6 +131,7 @@ button, select, input { font-family: inherit; color: inherit; }
   width: 100%; max-width: 1440px; margin: 0 auto; padding: 14px 40px 0;
   display: flex; justify-content: flex-end; gap: 16px;
 }
+.app-topbar > .date-range-row { grid-column: 1 / -1; max-width: none; padding: 0; }
 .date-range-fields {
   margin: 0; padding: 8px 12px 10px; display: flex; align-items: center; gap: 10px;
   border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface);

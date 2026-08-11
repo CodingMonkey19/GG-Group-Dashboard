@@ -7,6 +7,7 @@
  */
 
 import type { ChangeEvent } from 'react';
+import type { Scope } from './ScopeToggle';
 
 const MONTH_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -15,6 +16,9 @@ interface Props {
   months: string[];
   value: string;
   onChange: (month: string) => void;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
+  showScopeOptions?: boolean;
   disabled?: boolean;
 }
 
@@ -23,21 +27,31 @@ export function MonthSelector({
   months,
   value,
   onChange,
+  scope,
+  onScopeChange,
+  showScopeOptions = true,
   disabled = false,
 }: Props): JSX.Element | null {
   if (visible === false) return null;
 
   const handleChange = (e: ChangeEvent<HTMLSelectElement>): void => {
-    onChange(e.target.value);
+    const next = e.target.value;
+    if (next === 'year' || next === 'range') {
+      onScopeChange(next);
+      return;
+    }
+    onChange(next);
+    onScopeChange('month');
   };
+  const selectedValue = scope === 'month' ? value : scope;
 
   return (
     <label className="filter-field month-selector">
-      <span className="filter-field__label month-selector__label">Month</span>
+      <span className="filter-field__label month-selector__label">Period</span>
       <span className="select">
         <select
           className="month-selector__select"
-          value={value}
+          value={selectedValue}
           onChange={handleChange}
           disabled={disabled}
         >
@@ -51,6 +65,8 @@ export function MonthSelector({
               </option>
             );
           })}
+          {showScopeOptions && <option value="year">2026 Overall</option>}
+          {showScopeOptions && <option value="range">Custom period</option>}
         </select>
         <span className="select__chev" aria-hidden="true">
           ▾
