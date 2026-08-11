@@ -571,7 +571,7 @@ function SpendView({
 
   const isSingleProj = order !== null;
   const periodLabel = scopeMode === 'year'
-    ? 'Jan–Jul 2026'
+    ? '2026 Overall'
     : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
   const comparisonLabel = compareMonth === null
@@ -774,7 +774,7 @@ function SavingsView({
   );
 
   const periodLabel = scopeMode === 'year'
-    ? 'Jan–Jul 2026'
+    ? '2026 Overall'
     : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order === null ? periodLabel : `${order} · ${periodLabel}`;
   const comparisonLabel = compareMonth === null
