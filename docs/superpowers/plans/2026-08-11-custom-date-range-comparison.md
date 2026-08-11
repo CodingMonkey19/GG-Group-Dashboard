@@ -45,6 +45,6 @@
 - [x] Run `npm run typecheck` in `frontend`; expect exit code 0.
 - [x] Run `npm run build` in `frontend`; expect a successful Vite production build.
 - [x] Confirm source contains no stale `Feb–Dec 2026` or `Jan–Jul 2026` visible labels.
-- [ ] Commit and push the feature to `main`.
-- [ ] Rebuild and recreate the production `gg-dashboard` container with `docker compose -f docker-compose.vps.yml build` and `up -d`.
-- [ ] Verify the container is healthy, deployed commit matches `main`, the bundle contains `Custom period`, and `/api/data` still contains only January–July 2026 source rows.
+- [x] Commit and push the feature to `main`.
+- [x] Rebuild and recreate the production `gg-dashboard` container with `docker compose -f docker-compose.vps.yml build` and `up -d`.
+- [x] Verify the container is healthy, deployed commit matches `main`, the bundle contains `Custom period`, and `/api/data` still contains only January–July 2026 source rows.
