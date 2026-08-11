@@ -39,7 +39,7 @@ export interface ScopedTotal {
   by_status: PaymentStatusBreakdown;
 }
 
-/** True only for rows inside the dashboard's February–December 2026 reporting boundary. */
+/** True only for rows inside the dashboard's January–July 2026 reporting boundary. */
 export function isReportingYearRow(row: InvoiceRow): boolean {
   return (
     row.invoice_month >= DASHBOARD_REPORTING_START_MONTH

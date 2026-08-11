@@ -571,11 +571,9 @@ function SpendView({
 
   const isSingleProj = order !== null;
   const periodLabel = scopeMode === 'year'
-    ? 'Feb–Dec 2026'
+    ? 'Jan–Jul 2026'
     : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order !== null ? `${order} · ${periodLabel}` : periodLabel;
-  const linksInScope = summary.count;
-  const activeCount = isSingleProj ? 1 : ranked.length;
   const comparisonLabel = compareMonth === null
     ? null
     : scopeLabelFor({ year: REPORTING_YEAR, month: compareMonth });
@@ -606,12 +604,6 @@ function SpendView({
 
   return (
     <>
-      <Briefing
-        eyebrow={`BRIEFING · ${scopeLabel.toUpperCase()}`}
-        title={scopeMode === 'year' ? 'February–December 2026 in review' : `${periodLabel} in review`}
-        lede={`${scopeLabel} includes ${fmtNum(linksInScope)} completed rows, ${fmtEur(summary.eur)} in spend, and ${fmtEur(summary.savings_eur)} in savings${isSingleProj ? '.' : ` across ${fmtNum(activeCount)} projects.`}`}
-      />
-
       {failedSources.length > 0 && (
         <div className="empty-state" role="alert">
           <h2>{fmtNum(failedSources.length)} source(s) failed to refresh</h2>
@@ -782,7 +774,7 @@ function SavingsView({
   );
 
   const periodLabel = scopeMode === 'year'
-    ? 'Feb–Dec 2026'
+    ? 'Jan–Jul 2026'
     : scopeLabelFor({ year: REPORTING_YEAR, month });
   const scopeLabel = order === null ? periodLabel : `${order} · ${periodLabel}`;
   const comparisonLabel = compareMonth === null
